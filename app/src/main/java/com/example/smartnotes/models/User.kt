@@ -1,0 +1,9 @@
+package com.example.smartnotes.models
+
+
+data class User(
+    val name: String,
+    val email: String,
+    val password: String,
+    val role: UserRole = UserRole.STUDENT
+)
