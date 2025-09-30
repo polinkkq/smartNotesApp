@@ -45,7 +45,7 @@ class UserViewModel : ViewModel() {
                 if (response.isSuccessful && response.body()?.status == "success") {
                     _loginState.value = ApiState.Success(response.body()!!)
                 } else {
-                    _loginState.value = ApiState.Error(
+                    _registerState.value = ApiState.Error(
                         response.body()?.error ?: "Login failed"
                     )
                 }
@@ -54,11 +54,4 @@ class UserViewModel : ViewModel() {
             }
         }
     }
-}
-
-sealed class ApiState<out T> {
-    object Idle : ApiState<Nothing>()
-    object Loading : ApiState<Nothing>()
-    data class Success<T>(val data: T) : ApiState<T>()
-    data class Error(val message: String) : ApiState<Nothing>()
 }
