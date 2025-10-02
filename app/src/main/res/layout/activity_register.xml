@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/background">
+
+    <FrameLayout
+        android:layout_width="345dp"
+        android:layout_height="623dp"
+        android:background="@drawable/backlayout"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="635dp"
+            android:clipToPadding="true"
+            android:gravity="center|top"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:id="@+id/TextRegistration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:fontFamily="@font/inter_bold"
+                android:text="Регистрация"
+                android:textColor="#2C2C2C"
+                android:textSize="30sp"
+                android:textStyle="bold"
+                android:typeface="sans" />
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/nameRegistration"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/inputtext"
+                android:hint="Имя"
+                android:padding="10dp" />
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/lastnameRegistration"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/inputtext"
+                android:hint="Фамилия"
+                android:padding="10dp" />
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/emailRegistration"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/inputtext"
+                android:hint="example@email.com"
+                android:padding="10dp" />
+
+            <EditText
+                android:id="@+id/birthdayRegistration"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/inputtext"
+                android:ems="10"
+                android:hint="01.01.2025"
+                android:inputType="date"
+                android:padding="10dp" />
+
+            <RadioGroup
+                android:id="@+id/roleGroup"
+                android:layout_width="304dp"
+                android:layout_height="49dp"
+                android:layout_marginBottom="16dp"
+                android:orientation="horizontal"
+                android:padding="10dp">
+
+                <RadioButton
+                    android:id="@+id/roleStudent"
+                    style="@style/Widget.AppCompat.CompoundButton.RadioButton"
+                    android:layout_width="134dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:button="@drawable/custom_icon"
+                    android:checked="true"
+                    android:fontFamily="@font/inter_medium"
+                    android:paddingLeft="5dp"
+                    android:text="Студент"
+                    android:textColor="#333333" />
+
+                <RadioButton
+                    android:id="@+id/roleTeacher"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:button="@drawable/custom_icon"
+                    android:fontFamily="@font/inter_medium"
+                    android:paddingLeft="5dp"
+                    android:text="Преподаватель"
+                    android:textColor="#333333" />
+            </RadioGroup>
+
+            <EditText
+                android:id="@+id/phoneRegistration"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/inputtext"
+                android:ems="10"
+                android:hint="+7 (900) 800-0000"
+                android:inputType="phone"
+                android:padding="10dp" />
+
+            <EditText
+                android:id="@+id/passwordRegistration"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/inputtext"
+                android:ems="10"
+                android:hint="Пароль"
+                android:inputType="textPassword"
+                android:padding="10dp" />
+
+
+            <Button
+                android:id="@+id/buttonRegistration"
+                android:layout_width="wrap_content"
+                android:layout_height="58dp"
+                android:layout_marginBottom="16dp"
+                android:backgroundTint="#2B737171"
+                android:fontFamily="@font/inter_medium"
+                android:text="Зарегистрироваться" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
