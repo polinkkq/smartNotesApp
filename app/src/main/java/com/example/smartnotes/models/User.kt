@@ -4,14 +4,14 @@ import com.google.firebase.firestore.PropertyName
 
 data class User(
     @PropertyName("id") val id: String = "",
-    @PropertyName("first_name") val firstName: String = "",
-    @PropertyName("last_name") val lastName: String = "",
+    @PropertyName("firstName") val firstName: String = "",
+    @PropertyName("lastName") val lastName: String = "",
     @PropertyName("email") val email: String = "",
     @PropertyName("role") val role: String = "student",
-    @PropertyName("birth_date") val birthDate: String? = null,
+    @PropertyName("birthDate") val birthDate: String? = null,
     @PropertyName("phone") val phone: String? = null,
-    @PropertyName("created_at") val createdAt: Long = System.currentTimeMillis(),
-    @PropertyName("updated_at") val updatedAt: Long = System.currentTimeMillis()
+    @PropertyName("createdAt") val createdAt: Long = System.currentTimeMillis(),
+    @PropertyName("updatedAt") val updatedAt: Long = System.currentTimeMillis()
 ) {
     // Пустой конструктор для Firebase
     constructor() : this("", "", "", "", "student", null, null)

@@ -26,6 +26,7 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
+        checkCurrentUser()
         initViews()
         setupClickListeners()
 
@@ -50,7 +51,7 @@ class LoginActivity : AppCompatActivity() {
     private fun checkCurrentUser() {
         val currentUser = authRepository.getCurrentUser()
         if (currentUser != null) {
-            // Пользователь уже авторизован, переходим на главный экран
+
             navigateToMainActivity()
         }
     }
@@ -59,14 +60,14 @@ class LoginActivity : AppCompatActivity() {
         val email = emailAuth.text.toString().trim()
         val password = passwordAuth.text.toString().trim()
 
-        // Валидация
+
         if (!validateInput(email, password)) {
             return
         }
 
         showLoading(true)
 
-        // Авторизация через Firebase
+
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val result = authRepository.loginUser(email, password)

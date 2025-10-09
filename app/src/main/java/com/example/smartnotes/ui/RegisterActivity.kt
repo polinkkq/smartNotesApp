@@ -41,7 +41,12 @@ class RegistrationActivity : AppCompatActivity() {
         setupClickListeners()
         setupPhoneMask()
         setupDatePicker()
+        val backButton = findViewById<ImageButton>(R.id.imageButton)
+        backButton.setOnClickListener {
+            finish()
+        }
     }
+
 
     private fun initViews() {
         nameRegistration = findViewById(R.id.nameRegistration)
@@ -196,7 +201,6 @@ class RegistrationActivity : AppCompatActivity() {
 
         showLoading(true)
 
-        // Используем lifecycleScope вместо CoroutineScope
         lifecycleScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
@@ -236,7 +240,7 @@ class RegistrationActivity : AppCompatActivity() {
         birthDate: String,
         phone: String
     ): Boolean {
-        // твой существующий код валидации
+
         if (firstName.isEmpty() || lastName.isEmpty() || email.isEmpty() || password.isEmpty()) {
             showError("Заполните обязательные поля: Имя, Фамилия, Email и Пароль")
             return false

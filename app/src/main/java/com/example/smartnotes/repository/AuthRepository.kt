@@ -21,18 +21,18 @@ class AuthRepository {
         phone: String? = null
     ): Result<String> {
         return try {
-            // 1. Создаем пользователя в Firebase Authentication
+            // Создаем пользователя в Firebase Authentication
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
             val user = authResult.user
 
             if (user != null) {
-                // 2. Обновляем display name
+                // Обновляем display name
                 val profileUpdates = UserProfileChangeRequest.Builder()
                     .setDisplayName("$firstName $lastName")
                     .build()
                 user.updateProfile(profileUpdates).await()
 
-                // 3. Создаем запись в Firestore
+                // Создаем запись в Firestore
                 val firestoreUser = User(
                     id = user.uid,
                     firstName = firstName,

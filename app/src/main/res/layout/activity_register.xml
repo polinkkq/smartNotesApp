@@ -7,8 +7,10 @@
     android:background="@drawable/background">
 
     <FrameLayout
-        android:layout_width="345dp"
-        android:layout_height="623dp"
+        android:id="@+id/frameLayout"
+        android:layout_width="333dp"
+        android:layout_height="601dp"
+        android:layout_marginTop="20dp"
         android:background="@drawable/backlayout"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -16,7 +18,7 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="334dp"
             android:layout_height="635dp"
             android:clipToPadding="true"
             android:gravity="center|top"
@@ -42,6 +44,7 @@
                 android:layout_marginBottom="16dp"
                 android:background="@drawable/inputtext"
                 android:hint="Имя"
+                android:inputType="text|textCapWords|textCapSentences"
                 android:padding="10dp" />
 
             <com.google.android.material.textfield.TextInputEditText
@@ -50,6 +53,7 @@
                 android:layout_height="48dp"
                 android:layout_marginBottom="16dp"
                 android:background="@drawable/inputtext"
+                android:inputType="text|textCapWords|textCapSentences"
                 android:hint="Фамилия"
                 android:padding="10dp" />
 
@@ -141,5 +145,26 @@
         </LinearLayout>
 
     </FrameLayout>
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="wrap_content"
+        android:layout_height="38dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginBottom="16dp"
+        app:cardCornerRadius="7dp"
+        app:cardElevation="2dp"
+        app:layout_constraintBottom_toTopOf="@+id/frameLayout"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/imageButton"
+            style="@style/Widget.AppCompat.ImageButton"
+            android:layout_width="39dp"
+            android:layout_height="38dp"
+            android:layout_marginBottom="19dp"
+            android:background="@android:color/transparent"
+            android:padding="8dp"
+            app:srcCompat="@drawable/backto" />
+    </androidx.cardview.widget.CardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
