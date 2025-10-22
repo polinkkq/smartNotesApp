@@ -4,9 +4,10 @@ import com.google.firebase.firestore.PropertyName
 
 data class Folder(
     @PropertyName("id") val id: String = "",
-    @PropertyName("user_id") val userId: String = "",
+    @PropertyName("userId") val userId: String = "",
     @PropertyName("title") val title: String = "",
-    @PropertyName("created_at") val createdAt: Long = System.currentTimeMillis()
+    @PropertyName("createdAt") val createdAt: Long = System.currentTimeMillis(),
+    @PropertyName("summaryCount") val summaryCount: Int = 0
 ) {
-    constructor() : this("", "", "")
+    constructor() : this("", "", "", System.currentTimeMillis(), 0)
 }
