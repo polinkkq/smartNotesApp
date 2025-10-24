@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.Timestamp
 import kotlinx.coroutines.tasks.await
 import com.example.smartnotes.models.User
 
@@ -16,31 +17,25 @@ class AuthRepository {
         password: String,
         firstName: String,
         lastName: String,
-        role: String,
-        birthDate: String? = null,
-        phone: String? = null
+        role: String
     ): Result<String> {
         return try {
-            // Создаем пользователя в Firebase Authentication
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
             val user = authResult.user
 
             if (user != null) {
-                // Обновляем display name
                 val profileUpdates = UserProfileChangeRequest.Builder()
                     .setDisplayName("$firstName $lastName")
                     .build()
                 user.updateProfile(profileUpdates).await()
 
-                // Создаем запись в Firestore
                 val firestoreUser = User(
                     id = user.uid,
                     firstName = firstName,
                     lastName = lastName,
                     email = email,
                     role = role,
-                    birthDate = birthDate,
-                    phone = phone
+                    createdAt = Timestamp.now()
                 )
 
                 val result = firebaseRepository.createUser(firestoreUser)

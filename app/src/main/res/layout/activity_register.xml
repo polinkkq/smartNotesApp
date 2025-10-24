@@ -66,16 +66,6 @@
                 android:hint="example@email.com"
                 android:padding="10dp" />
 
-            <EditText
-                android:id="@+id/birthdayRegistration"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
-                android:background="@drawable/inputtext"
-                android:ems="10"
-                android:hint="01.01.2025"
-                android:inputType="date"
-                android:padding="10dp" />
 
             <RadioGroup
                 android:id="@+id/roleGroup"
@@ -109,17 +99,6 @@
                     android:text="Преподаватель"
                     android:textColor="#333333" />
             </RadioGroup>
-
-            <EditText
-                android:id="@+id/phoneRegistration"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
-                android:background="@drawable/inputtext"
-                android:ems="10"
-                android:hint="+7 (900) 800-0000"
-                android:inputType="phone"
-                android:padding="10dp" />
 
             <EditText
                 android:id="@+id/passwordRegistration"

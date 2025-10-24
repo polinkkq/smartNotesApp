@@ -4,7 +4,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
-import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -79,46 +78,81 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadUserData() {
-        // Временное решение без Firebase
-        userName.text = "Иванов Иван"
+        val currentUser = authRepository.getCurrentUser()
+        currentUser?.let { firebaseUser ->
+            CoroutineScope(Dispatchers.Main).launch {
+                val result = firebaseRepository.getUser(firebaseUser.uid)
+                if (result.isSuccess) {
+                    val user = result.getOrNull()
+                    user?.let {
+                        userName.text = "${it.firstName} ${it.lastName}"
+                    } ?: run {
+                        userName.text = firebaseUser.displayName ?: "Пользователь"
+                    }
+                } else {
+                    userName.text = firebaseUser.displayName ?: "Пользователь"
+                }
+            }
+        } ?: run {
+            userName.text = "Пользователь"
+        }
     }
 
     private fun loadFolders() {
-        // Тестовые данные папок
-        val testFolders = listOf(
-            Folder(
-                id = "1",
-                title = "История",
-                userId = "1",
-                createdAt = System.currentTimeMillis(),
-                summaryCount = 2
-            ),
-            Folder(
-                id = "2",
-                title = "Математика",
-                userId = "1",
-                createdAt = System.currentTimeMillis() - 24 * 60 * 60 * 1000,
-                summaryCount = 1
-            ),
-            Folder(
-                id = "3",
-                title = "Физика",
-                userId = "1",
-                createdAt = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000,
-                summaryCount = 0
-            )
-        )
+        val currentUserId = authRepository.getCurrentUser()?.uid ?: return
+        println("DEBUG: Loading folders for user: $currentUserId")
 
-        displayFolders(testFolders)
+        CoroutineScope(Dispatchers.Main).launch {
+            val result = firebaseRepository.getUserFolders(currentUserId)
+            println("DEBUG: Folders result: $result")
+            if (result.isSuccess) {
+                val folders = result.getOrNull() ?: emptyList()
+                println("DEBUG: Number of folders: ${folders.size}")
+                displayFolders(folders)
+            } else {
+                println("DEBUG: Error loading folders: ${result.exceptionOrNull()}")
+                displayFolders(emptyList())
+            }
+        }
+    }
+
+    private fun loadSummaries() {
+        val currentUserId = authRepository.getCurrentUser()?.uid ?: return
+        println("DEBUG: Loading summaries for user: $currentUserId")
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val result = firebaseRepository.getUnsortedSummaries(currentUserId)
+            println("DEBUG: Summaries result: $result")
+            if (result.isSuccess) {
+                val summaries = result.getOrNull() ?: emptyList()
+                println("DEBUG: Number of summaries: ${summaries.size}")
+                displaySummaries(summaries)
+            } else {
+                println("DEBUG: Error loading summaries: ${result.exceptionOrNull()}")
+                displaySummaries(emptyList())
+            }
+        }
     }
 
     private fun displayFolders(folders: List<Folder>) {
         foldersContainer.removeAllViews()
 
-        // Показываем только первые 2 папки (или все если меньше)
-        val foldersToShow = folders.take(2)
+        if (folders.isEmpty()) {
+            val emptyText = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                text = "Папок пока нет"
+                setTextColor(Color.parseColor("#666666"))
+                textSize = 14f
+                setPadding(dipToPx(16), dipToPx(16), dipToPx(16), dipToPx(16))
+            }
+            foldersContainer.addView(emptyText)
+            return
+        }
 
-        foldersToShow.forEach { folder ->
+        folders.take(2).forEach { folder ->
             val folderView = createFolderView(folder)
             foldersContainer.addView(folderView)
         }
@@ -143,7 +177,6 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dipToPx(16), dipToPx(16), dipToPx(16), dipToPx(16))
 
-                // Название папки
                 addView(TextView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -155,7 +188,6 @@ class MainActivity : AppCompatActivity() {
                     setTypeface(typeface, android.graphics.Typeface.BOLD)
                 })
 
-                // Дата создания
                 addView(TextView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -168,7 +200,6 @@ class MainActivity : AppCompatActivity() {
                     textSize = 14f
                 })
 
-                // Количество конспектов
                 addView(TextView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -196,42 +227,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadSummaries() {
-        // Тестовые данные конспектов
-        val testSummaries = listOf(
-            Summary(
-                id = "1",
-                title = "История России 01.01.2025",
-                createdAt = System.currentTimeMillis(),
-                folderId = "1" // принадлежит папке "История"
-            ),
-            Summary(
-                id = "2",
-                title = "Мобильная разработка 01.01.2025",
-                createdAt = System.currentTimeMillis() - 24 * 60 * 60 * 1000,
-                folderId = null // несортированный
-            ),
-            Summary(
-                id = "3",
-                title = "Алгебра 01.01.2025",
-                createdAt = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000,
-                folderId = "2" // принадлежит папке "Математика"
-            ),
-            Summary(
-                id = "4",
-                title = "Программирование 01.01.2025",
-                createdAt = System.currentTimeMillis() - 3 * 24 * 60 * 60 * 1000,
-                folderId = null // несортированный
-            )
-        )
-
-        // Фильтруем только несортированные конспекты (без папки)
-        val unsortedSummaries = testSummaries.filter { it.folderId == null }
-        displaySummaries(unsortedSummaries)
-    }
 
     private fun displaySummaries(summaries: List<Summary>) {
         unsortedContainer.removeAllViews()
+
+        if (summaries.isEmpty()) {
+            val emptyText = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                text = "Несортированных конспектов пока нет"
+                setTextColor(Color.parseColor("#666666"))
+                textSize = 14f
+                setPadding(dipToPx(16), dipToPx(16), dipToPx(16), dipToPx(16))
+            }
+            unsortedContainer.addView(emptyText)
+            return
+        }
 
         summaries.forEach { summary ->
             val summaryView = createSummaryView(summary)
@@ -258,7 +271,6 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dipToPx(16), dipToPx(16), dipToPx(16), dipToPx(16))
 
-                // Заголовок конспекта
                 addView(TextView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -270,7 +282,6 @@ class MainActivity : AppCompatActivity() {
                     setTypeface(typeface, android.graphics.Typeface.BOLD)
                 })
 
-                // Строка с датой и количеством страниц
                 addView(LinearLayout(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -280,7 +291,6 @@ class MainActivity : AppCompatActivity() {
                     }
                     orientation = LinearLayout.HORIZONTAL
 
-                    // Дата
                     addView(TextView(context).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -291,7 +301,6 @@ class MainActivity : AppCompatActivity() {
                         textSize = 14f
                     })
 
-                    // Пространство между
                     addView(TextView(context).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             0,
@@ -301,13 +310,12 @@ class MainActivity : AppCompatActivity() {
                         }
                     })
 
-                    // Количество страниц
                     addView(TextView(context).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
                         )
-                        text = "1 страница"
+                        text = "${summary.pageCount} ${getPageCountText(summary.pageCount)}"
                         setTextColor(Color.parseColor("#666666"))
                         textSize = 14f
                     })
@@ -320,6 +328,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun getPageCountText(count: Int): String {
+        return when {
+            count % 10 == 1 && count % 100 != 11 -> "страница"
+            count % 10 in 2..4 && count % 100 !in 12..14 -> "страницы"
+            else -> "страниц"
+        }
+    }
+
     private fun dipToPx(dip: Int): Int {
         return TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
@@ -328,25 +344,30 @@ class MainActivity : AppCompatActivity() {
         ).toInt()
     }
 
-    private fun getRelativeTime(timestamp: Long): String {
+    private fun getRelativeTime(timestamp: com.google.firebase.Timestamp): String {
         val currentTime = System.currentTimeMillis()
-        val diff = currentTime - timestamp
+        val timestampMillis = timestamp.toDate().time
+        val diff = currentTime - timestampMillis
 
         return when {
             diff < 24 * 60 * 60 * 1000 -> "Сегодня"
             diff < 2 * 24 * 60 * 60 * 1000 -> "Вчера"
             diff < 7 * 24 * 60 * 60 * 1000 -> "Неделю назад"
             else -> {
-                val date = Date(timestamp)
-                val format = SimpleDateFormat("dd.MM.yyyy", Locale.getDefault())
+                val date = java.util.Date(timestampMillis)
+                val format = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault())
                 format.format(date)
             }
         }
     }
 
     private fun openFolder(folder: Folder) {
-        Toast.makeText(this, "Открыта папка: ${folder.title}", Toast.LENGTH_SHORT).show()
-        // Здесь будет переход к папке
+        println("DEBUG: Opening folder: ${folder.id}, title: ${folder.title}")
+        val intent = Intent(this, FolderContentActivity::class.java).apply {
+            putExtra("FOLDER_ID", folder.id)
+            putExtra("FOLDER_TITLE", folder.title)
+        }
+        startActivity(intent)
     }
 
     private fun openSummary(summary: Summary) {
@@ -369,6 +390,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun refreshData() {
+        loadUserData()
         loadFolders()
         loadSummaries()
     }
