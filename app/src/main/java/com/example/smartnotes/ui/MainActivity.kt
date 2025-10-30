@@ -19,6 +19,7 @@ import com.example.smartnotes.repository.FirebaseRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,6 +44,13 @@ class MainActivity : AppCompatActivity() {
 
         initViews()
         setupClickListeners()
+        loadUserData()
+        loadFolders()
+        loadSummaries()
+    }
+
+    override fun onResume() {
+        super.onResume()
         loadUserData()
         loadFolders()
         loadSummaries()
@@ -371,15 +379,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openSummary(summary: Summary) {
-        Toast.makeText(this, "Открыт конспект: ${summary.title}", Toast.LENGTH_SHORT).show()
+        val intent = Intent(this, SummaryViewerActivity::class.java).apply {
+            putExtra("SUMMARY_ID", summary.id)
+        }
+        startActivity(intent)
     }
 
     private fun selectPhotoFromGallery() {
-        Toast.makeText(this, "Выбор фото из галереи", Toast.LENGTH_SHORT).show()
+        val intent = Intent(this, GalleryPickerActivity::class.java)
+        startActivity(intent)
     }
 
     private fun startScanning() {
-        Toast.makeText(this, "Запуск сканирования", Toast.LENGTH_SHORT).show()
+        val intent = Intent(this, ScannerActivity::class.java)
+        startActivity(intent)
     }
 
     private fun logout() {

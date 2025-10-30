@@ -44,6 +44,9 @@ android {
 }
 
 dependencies {
+
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+
     // Firebase BOM
     implementation(platform("com.google.firebase:firebase-bom:32.7.2"))
 
@@ -73,4 +76,18 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+
+    // Lifecycle
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+
+    // Timber for logging
+    implementation("com.jakewharton.timber:timber:5.0.1")
+
+    // CameraX
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-view:1.3.0")
+
+    // ML Kit Text Recognition
+    implementation("com.google.mlkit:text-recognition:16.0.0")
 }

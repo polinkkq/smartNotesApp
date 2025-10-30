@@ -7,6 +7,6 @@ data class User(
     val firstName: String = "",
     val lastName: String = "",
     val email: String = "",
-    val role: String = "",
+    val role: UserRole? = null,
     val createdAt: Timestamp = Timestamp.now()
 )

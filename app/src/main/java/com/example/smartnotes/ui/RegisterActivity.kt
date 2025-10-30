@@ -8,6 +8,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.smartnotes.R
 import com.google.android.material.textfield.TextInputEditText
 import com.example.smartnotes.repository.AuthRepository
+import com.example.smartnotes.models.UserRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,8 +21,6 @@ class RegistrationActivity : AppCompatActivity() {
     private lateinit var passwordRegistration: EditText
     private lateinit var registerButton: Button
     private lateinit var roleRadioGroup: RadioGroup
-    private lateinit var radioStudent: RadioButton
-    private lateinit var radioTeacher: RadioButton
 
     private val authRepository = AuthRepository()
 
@@ -45,8 +44,6 @@ class RegistrationActivity : AppCompatActivity() {
         passwordRegistration = findViewById(R.id.passwordRegistration)
         registerButton = findViewById(R.id.buttonRegistration)
         roleRadioGroup = findViewById(R.id.roleGroup)
-        radioStudent = findViewById(R.id.roleStudent)
-        radioTeacher = findViewById(R.id.roleTeacher)
     }
 
     private fun setupClickListeners() {
@@ -61,12 +58,10 @@ class RegistrationActivity : AppCompatActivity() {
         val email = emailRegistration.text.toString().trim()
         val password = passwordRegistration.text.toString().trim()
 
-
         val selectedRole = when (roleRadioGroup.checkedRadioButtonId) {
-            R.id.roleTeacher -> "teacher"
-            else -> "student"
+            R.id.roleTeacher -> UserRole.TEACHER
+            else -> UserRole.STUDENT
         }
-
 
         if (!validateInput(firstName, lastName, email, password)) {
             return
@@ -82,7 +77,7 @@ class RegistrationActivity : AppCompatActivity() {
                         password = password,
                         firstName = firstName,
                         lastName = lastName,
-                        role = selectedRole
+                        role = selectedRole // Передаем UserRole, а не String
                     )
                 }
 

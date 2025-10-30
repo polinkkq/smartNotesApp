@@ -4,11 +4,11 @@ import com.google.firebase.firestore.PropertyName
 
 data class Page(
     @PropertyName("id") val id: String = "",
-    @PropertyName("summary_id") val summaryId: String = "",
-    @PropertyName("page_number") val pageNumber: Int = 0,
-    @PropertyName("image_url") val imageUrl: String = "",
-    @PropertyName("recognized_text") val recognizedText: String = "",
-    @PropertyName("created_at") val createdAt: Long = System.currentTimeMillis()
+    @PropertyName("summaryId") val summaryId: String, // <-- Измени на summaryId
+    @PropertyName("pageNumber") val pageNumber: Int,
+    @PropertyName("imageUrl") val imageUrl: String,
+    @PropertyName("recognizedText") val recognizedText: String,
+    @PropertyName("createdAt") val createdAt: Long
 ) {
-    constructor() : this("", "", 0, "", "")
-}
+    // Конструктор для Firebase
+    constructor() : this("", "", 0, "", "", 0)}
