@@ -7,14 +7,11 @@ import com.example.smartnotes.models.Folder
 import com.example.smartnotes.models.Page
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
 
 class FirebaseRepository {
 
 
-    val database = FirebaseFirestore.getInstance()
-
+    val database: FirebaseFirestore = FirebaseFirestore.getInstance()
 
     suspend fun createUser(user: User): Result<String> {
         return try {
@@ -77,14 +74,14 @@ class FirebaseRepository {
             for (document in querySnapshot.documents) {
                 try {
                     val title = document.getString("title") ?: "Без названия"
-                    val createdAt = document.getTimestamp("createdAt")
+                    val createdAt = document.getLong("createdAt") ?: System.currentTimeMillis()
                     val docUserId = document.getString("userId") ?: ""
                     val summaryCount = document.getLong("summaryCount")?.toInt() ?: 0
 
                     val folder = Folder(
                         id = document.id,
                         title = title,
-                        createdAt = createdAt ?: Timestamp.now(),
+                        createdAt = createdAt,
                         userId = docUserId,
                         summaryCount = summaryCount
                     )
@@ -112,9 +109,9 @@ class FirebaseRepository {
 
             val summaries = mutableListOf<Summary>()
             for (document in querySnapshot.documents) {
-                val title = document.getString("title")
+                val title = document.getString("title") ?: "Без названия"
                 val pageCount = document.getLong("pageCount")?.toInt() ?: 0
-                val createdAt = document.getTimestamp("createdAt")
+                val createdAt = document.getLong("createdAt") ?: System.currentTimeMillis()
                 val docUserId = document.getString("userId") ?: ""
                 val docFolderId = document.getString("folderId") ?: ""
 
@@ -122,13 +119,16 @@ class FirebaseRepository {
                     id = document.id,
                     title = title,
                     pageCount = pageCount,
-                    createdAt = createdAt ?: Timestamp.now(),
+                    createdAt = createdAt,
                     userId = docUserId,
                     folderId = docFolderId
                 )
                 summaries.add(summary)
             }
-            Result.success(summaries)
+
+            val sorted = summaries.sortedByDescending { it.createdAt }
+
+            Result.success(sorted)
         } catch (e: Exception) {
             Timber.e(e, "Error in getUnsortedSummaries")
             Result.failure(e)
@@ -150,9 +150,9 @@ class FirebaseRepository {
             val summaries = mutableListOf<Summary>()
             for (document in querySnapshot.documents) {
                 try {
-                    val title = document.getString("title")
+                    val title = document.getString("title") ?: "Без названия"
                     val pageCount = document.getLong("pageCount")?.toInt() ?: 0
-                    val createdAt = document.getTimestamp("createdAt")
+                    val createdAt = document.getLong("createdAt") ?: System.currentTimeMillis()
                     val docUserId = document.getString("userId") ?: ""
                     val docFolderId = document.getString("folderId") ?: ""
 
@@ -161,7 +161,7 @@ class FirebaseRepository {
                             id = document.id,
                             title = title,
                             pageCount = pageCount,
-                            createdAt = createdAt ?: Timestamp.now(),
+                            createdAt = createdAt,
                             userId = docUserId,
                             folderId = docFolderId
                         )
@@ -180,11 +180,10 @@ class FirebaseRepository {
         }
     }
 
-
     suspend fun createSummary(summary: Summary): Result<String> {
         return try {
             val docRef = database.collection("summaries").document()
-            val newSummary = summary.copy(id = docRef.id) // копируем с новым ID
+            val newSummary = summary.copy(id = docRef.id)
             docRef.set(newSummary).await()
             Result.success(docRef.id)
         } catch (e: Exception) {
@@ -196,7 +195,7 @@ class FirebaseRepository {
     suspend fun createPage(page: Page): Result<String> {
         return try {
             val docRef = database.collection("pages").document()
-            val newPage = page.copy(id = docRef.id) // копируем с новым ID
+            val newPage = page.copy(id = docRef.id)
             docRef.set(newPage).await()
             Result.success(docRef.id)
         } catch (e: Exception) {
@@ -216,26 +215,29 @@ class FirebaseRepository {
 
     suspend fun getPagesBySummaryId(summaryId: String): Result<List<Page>> {
         return try {
-            Timber.d("Querying pages for summaryId: $summaryId") // <-- Обнови лог
+            Timber.d("Querying pages for summaryId: $summaryId")
 
             val querySnapshot = database.collection("pages")
-                .whereEqualTo("summaryId", summaryId) // <-- Измени на summaryId
+                .whereEqualTo("summaryId", summaryId)
                 .get()
                 .await()
 
-            Timber.d("Found ${querySnapshot.documents.size} pages for summaryId: $summaryId") // <-- Обнови лог
+            Timber.d("Found ${querySnapshot.documents.size} pages for summaryId: $summaryId")
 
             val pages = mutableListOf<Page>()
             for (document in querySnapshot.documents) {
                 val id = document.getString("id") ?: document.id
-                val docSummaryId = document.getString("summaryId") // <-- Измени на summaryId
+                val docSummaryId = document.getString("summaryId")
                 val pageNumber = document.getLong("pageNumber")?.toInt() ?: 0
                 val imageUrl = document.getString("imageUrl") ?: ""
                 val recognizedText = document.getString("recognizedText") ?: ""
                 val createdAt = document.getLong("createdAt") ?: System.currentTimeMillis()
 
                 if (docSummaryId != summaryId) {
-                    Timber.w("Page ${document.id} has summaryId: $docSummaryId, but expected: $summaryId")
+                    Timber.w(
+                        "Page ${document.id} has summaryId: $docSummaryId, " +
+                                "but expected: $summaryId"
+                    )
                 }
 
                 val page = Page(

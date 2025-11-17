@@ -13,6 +13,7 @@ import com.example.smartnotes.repository.AuthRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.core.view.WindowCompat
 
 class LoginActivity : AppCompatActivity() {
 
@@ -24,7 +25,9 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_login)
+
 
         checkCurrentUser()
         initViews()

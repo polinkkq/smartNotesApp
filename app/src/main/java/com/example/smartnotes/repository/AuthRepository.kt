@@ -4,7 +4,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
-import com.google.firebase.Timestamp
 import kotlinx.coroutines.tasks.await
 import com.example.smartnotes.models.User
 import com.example.smartnotes.models.UserRole
@@ -36,7 +35,7 @@ class AuthRepository {
                     lastName = lastName,
                     email = email,
                     role = role,
-                    createdAt = Timestamp.now()
+                    createdAt = System.currentTimeMillis()
                 )
 
                 val result = firebaseRepository.createUser(firestoreUser)
@@ -45,7 +44,10 @@ class AuthRepository {
                     Result.success(user.uid)
                 } else {
                     user.delete().await()
-                    Result.failure(result.exceptionOrNull() ?: Exception("Failed to create user in Firestore"))
+                    Result.failure(
+                        result.exceptionOrNull()
+                            ?: Exception("Failed to create user in Firestore")
+                    )
                 }
             } else {
                 Result.failure(Exception("User creation failed"))

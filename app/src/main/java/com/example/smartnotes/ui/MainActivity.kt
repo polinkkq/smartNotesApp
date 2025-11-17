@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.core.view.GravityCompat
 import com.example.smartnotes.R
 import com.example.smartnotes.models.Folder
 import com.example.smartnotes.models.Summary
@@ -19,10 +20,7 @@ import com.example.smartnotes.repository.FirebaseRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.lifecycle.lifecycleScope
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.core.view.WindowCompat
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,6 +38,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.main_activity)
 
         initViews()
@@ -69,7 +68,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupClickListeners() {
         menuButton.setOnClickListener {
-            drawerLayout.open()
+            drawerLayout.openDrawer(GravityCompat.START)
         }
 
         logoutButton.setOnClickListener {
@@ -235,7 +234,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun displaySummaries(summaries: List<Summary>) {
         unsortedContainer.removeAllViews()
 
@@ -352,9 +350,8 @@ class MainActivity : AppCompatActivity() {
         ).toInt()
     }
 
-    private fun getRelativeTime(timestamp: com.google.firebase.Timestamp): String {
+    private fun getRelativeTime(timestampMillis: Long): String {
         val currentTime = System.currentTimeMillis()
-        val timestampMillis = timestamp.toDate().time
         val diff = currentTime - timestampMillis
 
         return when {

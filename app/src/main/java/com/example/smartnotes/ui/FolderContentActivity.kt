@@ -1,5 +1,6 @@
 package com.example.smartnotes.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.TypedValue
 import android.widget.ImageButton
@@ -8,6 +9,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.core.view.GravityCompat
 import com.example.smartnotes.R
 import com.example.smartnotes.models.Summary
 import com.example.smartnotes.repository.AuthRepository
@@ -37,7 +39,6 @@ class FolderContentActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_folder_content)
 
-        // Получаем данные из интента
         folderId = intent.getStringExtra("FOLDER_ID") ?: ""
         folderTitle = intent.getStringExtra("FOLDER_TITLE") ?: "Папка"
 
@@ -60,7 +61,7 @@ class FolderContentActivity : AppCompatActivity() {
 
     private fun setupClickListeners() {
         menuButton.setOnClickListener {
-            drawerLayout.open()
+            drawerLayout.openDrawer(GravityCompat.START)
         }
 
         logoutButton.setOnClickListener {
@@ -144,7 +145,6 @@ class FolderContentActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dipToPx(16), dipToPx(16), dipToPx(16), dipToPx(16))
 
-                // Название конспекта
                 addView(TextView(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -156,7 +156,6 @@ class FolderContentActivity : AppCompatActivity() {
                     setTypeface(typeface, android.graphics.Typeface.BOLD)
                 })
 
-                // Контейнер для даты и количества страниц
                 addView(LinearLayout(context).apply {
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
@@ -166,7 +165,6 @@ class FolderContentActivity : AppCompatActivity() {
                     }
                     orientation = LinearLayout.HORIZONTAL
 
-                    // Дата создания
                     addView(TextView(context).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -177,7 +175,6 @@ class FolderContentActivity : AppCompatActivity() {
                         textSize = 14f
                     })
 
-                    // Распорка
                     addView(TextView(context).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             0,
@@ -187,7 +184,6 @@ class FolderContentActivity : AppCompatActivity() {
                         }
                     })
 
-                    // Количество страниц
                     addView(TextView(context).apply {
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -222,9 +218,8 @@ class FolderContentActivity : AppCompatActivity() {
         ).toInt()
     }
 
-    private fun getRelativeTime(timestamp: com.google.firebase.Timestamp): String {
+    private fun getRelativeTime(timestampMillis: Long): String {
         val currentTime = System.currentTimeMillis()
-        val timestampMillis = timestamp.toDate().time
         val diff = currentTime - timestampMillis
 
         return when {
@@ -242,8 +237,10 @@ class FolderContentActivity : AppCompatActivity() {
     }
 
     private fun openSummary(summary: Summary) {
-        // Здесь можно добавить логику открытия конспекта
-        println("DEBUG: Opening summary: ${summary.title}")
+        val intent = Intent(this, SummaryViewerActivity::class.java).apply {
+            putExtra("SUMMARY_ID", summary.id)
+        }
+        startActivity(intent)
     }
 
     private fun logout() {

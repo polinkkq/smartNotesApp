@@ -12,6 +12,7 @@ import com.example.smartnotes.models.UserRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.view.WindowCompat
 
 class RegistrationActivity : AppCompatActivity() {
 
@@ -26,6 +27,7 @@ class RegistrationActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_register)
 
         initViews()
@@ -77,7 +79,7 @@ class RegistrationActivity : AppCompatActivity() {
                         password = password,
                         firstName = firstName,
                         lastName = lastName,
-                        role = selectedRole // Передаем UserRole, а не String
+                        role = selectedRole
                     )
                 }
 

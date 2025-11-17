@@ -1,12 +1,14 @@
 package com.example.smartnotes.models
 
-import com.google.firebase.Timestamp
+import com.google.firebase.firestore.PropertyName
 
 data class Summary(
-    val id: String,
-    val title: String?,
-    val pageCount: Int,
-    val createdAt: Timestamp,
-    val userId: String,
-    val folderId: String?
-)
+    @PropertyName("id") val id: String = "",
+    @PropertyName("title") val title: String = "",
+    @PropertyName("pageCount") val pageCount: Int = 0,
+    @PropertyName("createdAt") val createdAt: Long = System.currentTimeMillis(),
+    @PropertyName("userId") val userId: String = "",
+    @PropertyName("folderId") val folderId: String = "" // "" -> Несортированные
+) {
+    constructor() : this("", "", 0, System.currentTimeMillis(), "", "")
+}
