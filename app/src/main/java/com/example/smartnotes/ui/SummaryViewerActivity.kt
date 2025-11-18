@@ -23,8 +23,8 @@ class SummaryViewerActivity : AppCompatActivity() {
 
     private var pages: List<Page> = emptyList()
 
-    private val pageWidthDp = 480  // Увеличиваем ширину страницы до 480dp
-    private val maxPageTextLength = 2500  // Максимальное количество символов на странице
+    private val pageWidthDp = 580  // Увеличиваем ширину страницы до 480dp
+    private val maxPageTextLength = 2000  // Максимальное количество символов на странице
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
