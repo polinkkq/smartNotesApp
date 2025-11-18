@@ -20,7 +20,7 @@ object YandexOcrService {
 
     // !!! сюда вставь свой API-ключ, который тебе выдал Yandex Cloud
     // пример: "AQVNy6BGPqhn_Rm_........"
-    private const val API_KEY = ""
+    private const val API_KEY = "AQVNy6BGPqhn_Rm_z1diXC9w877wvnzsEMgrHB9q"
 
     // эндпоинт из документации
     private const val OCR_URL = "https://ocr.api.cloud.yandex.net/ocr/v1/recognizeText"
