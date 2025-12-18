@@ -55,5 +55,9 @@
             android:name=".ui.SummaryViewerActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.CreateFolderActivity"
+            android:exported="false" />
+
     </application>
 </manifest>

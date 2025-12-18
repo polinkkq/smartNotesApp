@@ -1,61 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".ui.SummaryViewerActivity">
+    android:background="#00FFFFFF"
+    android:backgroundTint="#00FFFFFF"
+    android:padding="16dp">
 
-    <!-- Зум всего документа -->
-    <com.otaliastudios.zoom.ZoomLayout
-        android:id="@+id/zoomLayout"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:zoomEnabled="true"
-        app:minZoom="1"
-        app:maxZoom="3"
-        app:overScrollHorizontal="true"
-        app:overScrollVertical="true"
-        app:scrollEnabled="true"
-        app:flingEnabled="true">
+    <TextView
+        android:id="@+id/pageNumberText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1 из 1"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-        <!-- Вертикальный скролл по страницам -->
+    <!-- Фиксированный "лист" одинакового размера -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/pageCard"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="4dp"
+        app:cardUseCompatPadding="true"
+        app:layout_constraintBottom_toTopOf="@+id/buttonsRow"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/pageNumberText">
+
         <ScrollView
-            android:id="@+id/scrollView"
+            android:id="@+id/pageScroll"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:fillViewport="true">
 
-            <LinearLayout
-                android:id="@+id/pagesContainer"
+            <TextView
+                android:id="@+id/textContent"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:lineSpacingExtra="4dp"
                 android:padding="16dp"
-                android:gravity="center_horizontal">
-
-                <!-- Страницы будут добавляться сюда программно -->
-
-            </LinearLayout>
+                android:text="Загрузка..."
+                android:textSize="16sp" />
         </ScrollView>
-    </com.otaliastudios.zoom.ZoomLayout>
+    </androidx.cardview.widget.CardView>
 
-    <!-- Индикатор текущей страницы -->
-    <TextView
-        android:id="@+id/pageIndicator"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:id="@+id/buttonsRow"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="24dp"
-        android:background="@drawable/bg_indicator"
-        android:paddingStart="24dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="24dp"
-        android:paddingBottom="8dp"
-        android:text="0 из 0"
-        android:textAlignment="center"
-        android:textAllCaps="false"
-        android:textColor="@android:color/black"
-        android:textSize="20sp" />
+        android:gravity="end"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
-</FrameLayout>
+        <ImageButton
+            android:id="@+id/buttonPrev"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:backgroundTint="#44FFFFFF"
+            app:srcCompat="@drawable/back_page" />
+
+        <ImageButton
+            android:id="@+id/buttonNext"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:backgroundTint="#1DFFFFFF"
+            app:srcCompat="@drawable/next_page" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

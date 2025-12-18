@@ -12,26 +12,28 @@ import com.example.smartnotes.ai.YandexOcrService
 import com.example.smartnotes.models.Page
 import com.example.smartnotes.models.Summary
 import com.example.smartnotes.repository.AuthRepository
-import com.example.smartnotes.repository.FirebaseRepository
+import com.example.smartnotes.repository.NotesRepository
+import com.example.smartnotes.repository.RepositoryProvider
+import com.example.smartnotes.repository.SessionManager
+import com.example.smartnotes.utils.TextPaginator
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 
 class GalleryPickerActivity : AppCompatActivity() {
 
-    private lateinit var firebaseRepository: FirebaseRepository
     private val authRepository = AuthRepository()
+    private lateinit var notesRepository: NotesRepository
 
     companion object {
         private const val PICK_IMAGE_REQUEST = 1
+        private const val MAX_CHARS_PER_PAGE = 1800
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        firebaseRepository = FirebaseRepository()
+        notesRepository = RepositoryProvider.notes(this)
 
-        // 🔹 Разрешаем выбор нескольких изображений
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             type = "image/*"
             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -39,25 +41,23 @@ class GalleryPickerActivity : AppCompatActivity() {
         startActivityForResult(Intent.createChooser(intent, "Выберите изображения"), PICK_IMAGE_REQUEST)
     }
 
+    private fun resolveUserId(): String? {
+        return if (SessionManager.isGuestMode(this)) "guest" else authRepository.getCurrentUser()?.uid
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == PICK_IMAGE_REQUEST && resultCode == Activity.RESULT_OK) {
-
             val uris = mutableListOf<Uri>()
 
-            // Если выбрано несколько файлов
             val clipData = data?.clipData
             if (clipData != null && clipData.itemCount > 0) {
                 for (i in 0 until clipData.itemCount) {
-                    val uri = clipData.getItemAt(i).uri
-                    if (uri != null) uris.add(uri)
+                    clipData.getItemAt(i)?.uri?.let { uris.add(it) }
                 }
             } else {
-                // Если выбрано одно изображение
-                data?.data?.let { uri ->
-                    uris.add(uri)
-                }
+                data?.data?.let { uris.add(it) }
             }
 
             if (uris.isEmpty()) {
@@ -66,123 +66,75 @@ class GalleryPickerActivity : AppCompatActivity() {
                 return
             }
 
-            // 🔹 Обрабатываем сразу все изображения
-            lifecycleScope.launch {
-                processImagesBatch(uris)
-            }
+            lifecycleScope.launch { processImagesBatch(uris) }
         } else {
-            // Пользователь отменил выбор
             finish()
         }
     }
 
-    /**
-     * Обработка пачки изображений:
-     *  - создаём ОДИН summary
-     *  - для каждого изображения создаём Page с новым номером
-     */
     private suspend fun processImagesBatch(imageUris: List<Uri>) {
         Timber.d("processImagesBatch called, count = ${imageUris.size}")
 
-        val userId = authRepository.getCurrentUser()?.uid
-        if (userId == null) {
-            Timber.e("User not authenticated")
+        val userId = resolveUserId()
+        if (userId.isNullOrBlank()) {
             Toast.makeText(this, "Пользователь не авторизован", Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
         try {
-            // 🔹 1. Создаём один конспект
+            // 1) создаём один конспект
             val summaryId = createNewSummary(userId, "Новый конспект из галереи")
 
-            var successfulPages = 0
-            var pageNumber = 1
+            // 2) OCR всех картинок → собираем в один текст
+            val sb = StringBuilder()
+            var recognizedAny = false
 
-            // 🔹 2. Для каждого изображения делаем OCR и сохраняем как страницу
             for (uri in imageUris) {
                 try {
-                    val text = recognizeTextFromImage(uri)
+                    val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, uri)
+                    val text = YandexOcrService.recognizeText(bitmap).trim()
                     if (text.isNotBlank()) {
-                        savePage(summaryId, pageNumber, text, uri.toString())
-                        successfulPages++
-                        pageNumber++
-                    } else {
-                        Timber.d("Empty OCR result for uri: $uri")
+                        recognizedAny = true
+                        sb.append(text).append("\n\n")
                     }
                 } catch (e: Exception) {
-                    Timber.e(e, "Error processing image: $uri")
+                    Timber.e(e, "Error OCR for uri=$uri")
                 }
             }
 
-            // 🔹 3. Обновляем количество страниц в summary
-            if (successfulPages > 0) {
-                firebaseRepository.updateSummaryPageCount(summaryId, successfulPages)
-                Toast.makeText(
-                    this,
-                    "Конспект сохранён, страниц: $successfulPages",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                Toast.makeText(
-                    this,
-                    "Не удалось распознать текст ни на одном изображении",
-                    Toast.LENGTH_LONG
-                ).show()
+            if (!recognizedAny) {
+                Toast.makeText(this, "Не удалось распознать текст ни на одном изображении", Toast.LENGTH_LONG).show()
+                finish()
+                return
             }
+
+            val fullText = sb.toString().trim()
+
+            // 3) делим на страницы по итоговому тексту
+            val pagesText = TextPaginator.splitIntoPages(fullText, MAX_CHARS_PER_PAGE)
+
+            // 4) сохраняем страницы
+            val saveOk = savePages(summaryId, pagesText)
+            if (!saveOk) {
+                Toast.makeText(this, "Ошибка сохранения страниц", Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+
+            // 5) обновляем pageCount
+            notesRepository.updateSummaryPageCount(summaryId, pagesText.size)
+
+            Toast.makeText(this, "Конспект сохранён, страниц: ${pagesText.size}", Toast.LENGTH_LONG).show()
 
         } catch (e: Exception) {
             Timber.e(e, "Error in processImagesBatch")
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
         } finally {
-            // Возвращаемся на главный экран после обработки
             finish()
         }
     }
 
-    /**
-     * Отдельная функция для OCR одного изображения
-     */
-    private suspend fun recognizeTextFromImage(imageUri: Uri): String {
-        Timber.d("recognizeTextFromImage called with URI: $imageUri")
-        return try {
-            val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
-
-            // ✅ вызывaем YandexOcrService только с bitmap
-            val recognizedText = YandexOcrService.recognizeText(bitmap)
-
-            Timber.d("Recognized text from Yandex OCR: $recognizedText")
-            recognizedText
-        } catch (e: Exception) {
-            Timber.e(e, "Error in recognizeTextFromImage")
-            ""
-        }
-    }
-
-    /**
-     * Сохраняем страницу в Firestore
-     */
-    private suspend fun savePage(summaryId: String, pageNumber: Int, text: String, imageUrl: String) {
-        val newPage = Page(
-            id = "",
-            summaryId = summaryId,
-            pageNumber = pageNumber,
-            imageUrl = imageUrl,
-            recognizedText = text,
-            createdAt = System.currentTimeMillis()
-        )
-
-        val result = firebaseRepository.createPage(newPage)
-        if (result.isSuccess) {
-            Timber.d("Page $pageNumber saved for summary $summaryId")
-        } else {
-            Timber.e(result.exceptionOrNull(), "Failed to save page $pageNumber for summary $summaryId")
-        }
-    }
-
-    /**
-     * Создаём новый summary c пустым folderId (несортированные)
-     */
     private suspend fun createNewSummary(userId: String, title: String): String {
         val newSummary = Summary(
             id = "",
@@ -192,7 +144,29 @@ class GalleryPickerActivity : AppCompatActivity() {
             userId = userId,
             folderId = ""
         )
-        val result = firebaseRepository.createSummary(newSummary)
+        val result = notesRepository.createSummary(newSummary)
         return result.getOrThrow()
+    }
+
+    private suspend fun savePages(summaryId: String, pagesText: List<String>): Boolean {
+        if (pagesText.isEmpty()) return false
+
+        for ((index, text) in pagesText.withIndex()) {
+            val page = Page(
+                id = "",
+                summaryId = summaryId,
+                pageNumber = index + 1,
+                imageUrl = "",
+                recognizedText = text,
+                createdAt = System.currentTimeMillis()
+            )
+
+            val res = notesRepository.createPage(page)
+            if (!res.isSuccess) {
+                Timber.e(res.exceptionOrNull(), "Failed to create page ${index + 1} for summaryId=$summaryId")
+                return false
+            }
+        }
+        return true
     }
 }

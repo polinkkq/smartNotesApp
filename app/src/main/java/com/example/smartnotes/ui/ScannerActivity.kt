@@ -8,7 +8,10 @@ import android.provider.MediaStore
 import android.widget.ImageButton
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.*
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
@@ -20,9 +23,11 @@ import com.example.smartnotes.ai.YandexOcrService
 import com.example.smartnotes.models.Page
 import com.example.smartnotes.models.Summary
 import com.example.smartnotes.repository.AuthRepository
-import com.example.smartnotes.repository.FirebaseRepository
+import com.example.smartnotes.repository.NotesRepository
+import com.example.smartnotes.repository.RepositoryProvider
+import com.example.smartnotes.repository.SessionManager
+import com.example.smartnotes.utils.TextPaginator
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -35,8 +40,8 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var viewFinder: PreviewView
     private lateinit var captureButton: ImageButton
 
-    private lateinit var firebaseRepository: FirebaseRepository
     private val authRepository = AuthRepository()
+    private lateinit var notesRepository: NotesRepository
 
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
@@ -44,42 +49,38 @@ class ScannerActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+
+        // сколько символов примерно влезает на 1 страницу
+        private const val MAX_CHARS_PER_PAGE = 1800
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // edge-to-edge
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
         setContentView(R.layout.activity_scanner)
+
+        notesRepository = RepositoryProvider.notes(this)
 
         viewFinder = findViewById(R.id.viewFinder)
         captureButton = findViewById(R.id.captureButton)
 
-        firebaseRepository = FirebaseRepository()
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        captureButton.setOnClickListener {
-            takePhoto()
-        }
+        captureButton.setOnClickListener { takePhoto() }
 
-        if (allPermissionsGranted()) {
-            startCamera()
-        } else {
-            ActivityCompat.requestPermissions(
-                this,
-                REQUIRED_PERMISSIONS,
-                REQUEST_CODE_PERMISSIONS
-            )
-        }
+        if (allPermissionsGranted()) startCamera()
+        else ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+    }
+
+    private fun resolveUserId(): String? {
+        return if (SessionManager.isGuestMode(this)) "guest" else authRepository.getCurrentUser()?.uid
     }
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
 
-        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
-            .format(java.util.Date())
+        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US).format(java.util.Date())
         val file = File(externalCacheDir, "$name.jpg")
         val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
 
@@ -88,18 +89,12 @@ class ScannerActivity : AppCompatActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exception: ImageCaptureException) {
-                    Toast.makeText(
-                        this@ScannerActivity,
-                        "Ошибка при захвате фото",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this@ScannerActivity, "Ошибка при захвате фото", Toast.LENGTH_SHORT).show()
                 }
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val savedUri = output.savedUri ?: Uri.fromFile(file)
-                    lifecycleScope.launch {
-                        processImage(savedUri)
-                    }
+                    lifecycleScope.launch { processImage(savedUri) }
                 }
             }
         )
@@ -108,60 +103,44 @@ class ScannerActivity : AppCompatActivity() {
     private suspend fun processImage(imageUri: Uri) {
         Timber.d("processImage called with URI: $imageUri")
 
-        try {
-            val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
-
-            val recognizedText = YandexOcrService.recognizeText(bitmap)
-
-            if (recognizedText.isNotEmpty()) {
-                Timber.d("Recognized text from Yandex OCR: $recognizedText")
-                savePageToFirebase(recognizedText, imageUri.toString())
-            } else {
-                Timber.d("Recognized text is empty from Yandex OCR")
-                Toast.makeText(this, "Не удалось распознать текст", Toast.LENGTH_SHORT).show()
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Error in processImage")
-            Toast.makeText(this, "Ошибка распознавания: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private suspend fun savePageToFirebase(text: String, imageUrl: String) {
-        val userId = authRepository.getCurrentUser()?.uid
-
-        if (userId == null) {
-            Timber.e("User not authenticated")
+        val userId = resolveUserId()
+        if (userId.isNullOrBlank()) {
             Toast.makeText(this, "Пользователь не авторизован", Toast.LENGTH_SHORT).show()
             return
         }
 
         try {
-            val summaryId = createNewSummary(userId, "Новый конспект из камеры")
-            val pageCount = getSummaryPageCount(summaryId)
+            val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
+            val recognizedText = YandexOcrService.recognizeText(bitmap).trim()
 
-            val newPage = Page(
-                id = "",
-                summaryId = summaryId,
-                pageNumber = pageCount + 1,
-                imageUrl = imageUrl,
-                recognizedText = text,
-                createdAt = System.currentTimeMillis()
-            )
-
-            val result = firebaseRepository.createPage(newPage)
-
-            if (result.isSuccess) {
-                firebaseRepository.updateSummaryPageCount(summaryId, pageCount + 1)
-                Toast.makeText(this@ScannerActivity, "Страница сохранена", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(
-                    this,
-                    "Ошибка сохранения страницы: ${result.exceptionOrNull()?.message}",
-                    Toast.LENGTH_LONG
-                ).show()
+            if (recognizedText.isBlank()) {
+                Toast.makeText(this, "Не удалось распознать текст", Toast.LENGTH_SHORT).show()
+                return
             }
+
+            // 1) создаём новый конспект
+            val summaryId = createNewSummary(userId, "Новый конспект из камеры")
+
+            // 2) режем текст на страницы
+            val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
+
+            // 3) сохраняем страницы в БД
+            val saveOk = savePages(summaryId, pagesText)
+
+            if (!saveOk) {
+                Toast.makeText(this, "Ошибка сохранения страниц", Toast.LENGTH_LONG).show()
+                return
+            }
+
+            // 4) обновляем pageCount у конспекта
+            notesRepository.updateSummaryPageCount(summaryId, pagesText.size)
+
+            Toast.makeText(this, "Конспект сохранён, страниц: ${pagesText.size}", Toast.LENGTH_LONG).show()
+            finish()
+
         } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+            Timber.e(e, "Error in processImage")
+            Toast.makeText(this, "Ошибка распознавания: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -174,14 +153,30 @@ class ScannerActivity : AppCompatActivity() {
             userId = userId,
             folderId = ""
         )
-        val result = firebaseRepository.createSummary(newSummary)
+        val result = notesRepository.createSummary(newSummary)
         return result.getOrThrow()
     }
 
-    private suspend fun getSummaryPageCount(summaryId: String): Int {
-        val snapshot =
-            firebaseRepository.database.collection("summaries").document(summaryId).get().await()
-        return snapshot.getLong("pageCount")?.toInt() ?: 0
+    private suspend fun savePages(summaryId: String, pagesText: List<String>): Boolean {
+        if (pagesText.isEmpty()) return false
+
+        for ((index, text) in pagesText.withIndex()) {
+            val page = Page(
+                id = "",
+                summaryId = summaryId,
+                pageNumber = index + 1,
+                imageUrl = "", // в этом режиме мы страницы показываем текстом, без картинок
+                recognizedText = text,
+                createdAt = System.currentTimeMillis()
+            )
+
+            val res = notesRepository.createPage(page)
+            if (!res.isSuccess) {
+                Timber.e(res.exceptionOrNull(), "Failed to create page ${index + 1} for summaryId=$summaryId")
+                return false
+            }
+        }
+        return true
     }
 
     private fun startCamera() {
@@ -195,32 +190,19 @@ class ScannerActivity : AppCompatActivity() {
             }
 
             imageCapture = ImageCapture.Builder().build()
-
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
                 cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this,
-                    cameraSelector,
-                    preview,
-                    imageCapture
-                )
+                cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
             } catch (exc: Exception) {
-                Toast.makeText(
-                    this,
-                    "Ошибка камеры: ${exc.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(this, "Ошибка камеры: ${exc.message}", Toast.LENGTH_SHORT).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
     private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(
-            baseContext,
-            it
-        ) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun onRequestPermissionsResult(
@@ -230,11 +212,9 @@ class ScannerActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
-            if (allPermissionsGranted()) {
-                startCamera()
-            } else {
-                Toast.makeText(this, "Разрешения камеры не предоставлены", Toast.LENGTH_SHORT)
-                    .show()
+            if (allPermissionsGranted()) startCamera()
+            else {
+                Toast.makeText(this, "Разрешения камеры не предоставлены", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }

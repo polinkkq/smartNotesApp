@@ -13,6 +13,5 @@
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>
-
     <style name="Theme.SmartNotes" parent="Base.Theme.SmartNotes" />
 </resources>
