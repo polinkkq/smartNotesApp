@@ -5,7 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.widget.EditText
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.example.smartnotes.ai.YandexOcrService
@@ -18,6 +20,9 @@ import com.example.smartnotes.repository.SessionManager
 import com.example.smartnotes.utils.TextPaginator
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class GalleryPickerActivity : AppCompatActivity() {
 
@@ -66,13 +71,17 @@ class GalleryPickerActivity : AppCompatActivity() {
                 return
             }
 
-            lifecycleScope.launch { processImagesBatch(uris) }
+            // ✅ спрашиваем название ОДИН раз на весь конспект
+            showTitleInputDialog { title ->
+                lifecycleScope.launch { processImagesBatch(uris, title) }
+            }
+
         } else {
             finish()
         }
     }
 
-    private suspend fun processImagesBatch(imageUris: List<Uri>) {
+    private suspend fun processImagesBatch(imageUris: List<Uri>, summaryTitle: String) {
         Timber.d("processImagesBatch called, count = ${imageUris.size}")
 
         val userId = resolveUserId()
@@ -83,10 +92,10 @@ class GalleryPickerActivity : AppCompatActivity() {
         }
 
         try {
-            // 1) создаём один конспект
-            val summaryId = createNewSummary(userId, "Новый конспект из галереи")
+            // ✅ создаём конспект с названием пользователя
+            val summaryId = createNewSummary(userId, summaryTitle)
 
-            // 2) OCR всех картинок → собираем в один текст
+            // OCR всех картинок → один общий текст
             val sb = StringBuilder()
             var recognizedAny = false
 
@@ -111,10 +120,10 @@ class GalleryPickerActivity : AppCompatActivity() {
 
             val fullText = sb.toString().trim()
 
-            // 3) делим на страницы по итоговому тексту
+            // делим на страницы
             val pagesText = TextPaginator.splitIntoPages(fullText, MAX_CHARS_PER_PAGE)
 
-            // 4) сохраняем страницы
+            // сохраняем страницы
             val saveOk = savePages(summaryId, pagesText)
             if (!saveOk) {
                 Toast.makeText(this, "Ошибка сохранения страниц", Toast.LENGTH_LONG).show()
@@ -122,9 +131,7 @@ class GalleryPickerActivity : AppCompatActivity() {
                 return
             }
 
-            // 5) обновляем pageCount
             notesRepository.updateSummaryPageCount(summaryId, pagesText.size)
-
             Toast.makeText(this, "Конспект сохранён, страниц: ${pagesText.size}", Toast.LENGTH_LONG).show()
 
         } catch (e: Exception) {
@@ -168,5 +175,29 @@ class GalleryPickerActivity : AppCompatActivity() {
             }
         }
         return true
+    }
+
+    private fun showTitleInputDialog(onResult: (String) -> Unit) {
+        val editText = EditText(this).apply {
+            hint = "Название конспекта"
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Новый конспект")
+            .setMessage("Введите название конспекта")
+            .setView(editText)
+            .setCancelable(false)
+            .setPositiveButton("Продолжить") { _, _ ->
+                val title = editText.text.toString().trim()
+                val finalTitle =
+                    if (title.isBlank()) {
+                        "Конспект от ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())}"
+                    } else title
+                onResult(finalTitle)
+            }
+            .setNegativeButton("Отмена") { _, _ ->
+                finish()
+            }
+            .show()
     }
 }

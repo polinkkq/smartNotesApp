@@ -7,6 +7,7 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import com.example.smartnotes.R
@@ -30,10 +31,9 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var buttonGoogle: Button
 
     private val authRepository = AuthRepository()
-
     private lateinit var googleSignInClient: GoogleSignInClient
 
-    // Получаем результат выбора аккаунта Google
+    // Google launcher
     private val googleLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             try {
@@ -51,7 +51,6 @@ class LoginActivity : AppCompatActivity() {
                     return@registerForActivityResult
                 }
 
-                // Google-вход = не гость
                 SessionManager.setGuestMode(this@LoginActivity, false)
 
                 CoroutineScope(Dispatchers.IO).launch {
@@ -89,15 +88,12 @@ class LoginActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_login)
 
-        // Настройка Google Sign-In
-        // В strings.xml должна быть строка default_web_client_id (её обычно генерит google-services)
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
-        // Сначала инициализируем view, потом проверяем пользователя
         initViews()
         setupClickListeners()
         checkCurrentUser()
@@ -106,10 +102,9 @@ class LoginActivity : AppCompatActivity() {
     private fun initViews() {
         emailAuth = findViewById(R.id.emailAuth)
         passwordAuth = findViewById(R.id.passwordAuth)
+
         buttonAuth = findViewById(R.id.buttonAuth)
         buttonGuest = findViewById(R.id.buttonGuest)
-
-        // ⚠️ Должна быть в layout
         buttonGoogle = findViewById(R.id.buttonGoogle)
     }
 
@@ -122,7 +117,6 @@ class LoginActivity : AppCompatActivity() {
         }
 
         buttonGoogle.setOnClickListener {
-            // на всякий случай чистим прошлый аккаунт, чтобы всегда показывался выбор
             googleSignInClient.signOut().addOnCompleteListener {
                 showLoading(true)
                 googleLauncher.launch(googleSignInClient.signInIntent)
@@ -132,15 +126,16 @@ class LoginActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.textRegister)?.setOnClickListener {
             navigateToRegistration()
         }
+
+        // ✅ ВОТ ЭТОГО У ТЕБЯ НЕ ХВАТАЛО: обработчик "Забыли пароль"
+        // Убедись, что в activity_login.xml у текста "Забыли пароль?" id = textForgotPassword
+        findViewById<TextView>(R.id.textForgotPassword)?.setOnClickListener {
+            showResetPasswordDialog()
+        }
     }
 
     private fun checkCurrentUser() {
-        // Если включён гость — НЕ автопереходить в Main при новом запуске.
-        // (Ты уже хотела, чтобы гостя возвращало на авторизацию после перезапуска)
-        if (SessionManager.isGuestMode(this)) {
-            // остаёмся на логине
-            return
-        }
+        if (SessionManager.isGuestMode(this)) return
 
         val currentUser = authRepository.getCurrentUser()
         if (currentUser != null) {
@@ -169,6 +164,61 @@ class LoginActivity : AppCompatActivity() {
                     Toast.makeText(
                         this@LoginActivity,
                         "Ошибка входа: ${result.exceptionOrNull()?.message ?: "Неизвестная ошибка"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+
+    // ✅ Диалог восстановления пароля
+    private fun showResetPasswordDialog() {
+        val emailPrefill = emailAuth.text?.toString()?.trim().orEmpty()
+
+        val input = TextInputEditText(this).apply {
+            hint = "Email"
+            setText(emailPrefill)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Восстановление пароля")
+            .setMessage("Введите email, на который отправить письмо для сброса пароля.")
+            .setView(input)
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Отправить") { _, _ ->
+                val email = input.text?.toString()?.trim().orEmpty()
+
+                if (email.isBlank()) {
+                    Toast.makeText(this@LoginActivity, "Введите email", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    Toast.makeText(this@LoginActivity, "Введите корректный email", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+
+                sendResetEmail(email)
+            }
+            .show()
+    }
+
+    private fun sendResetEmail(email: String) {
+        showLoading(true)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val res = authRepository.sendPasswordReset(email)
+            runOnUiThread {
+                showLoading(false)
+                if (res.isSuccess) {
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "Письмо для сброса пароля отправлено на $email",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "Ошибка: ${res.exceptionOrNull()?.message ?: "Не удалось отправить письмо"}",
                         Toast.LENGTH_LONG
                     ).show()
                 }

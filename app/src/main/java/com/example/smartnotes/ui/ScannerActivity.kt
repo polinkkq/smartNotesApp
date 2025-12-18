@@ -2,11 +2,19 @@ package com.example.smartnotes.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.HapticFeedbackConstants
+import android.view.View
+import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -17,6 +25,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
 import com.example.smartnotes.R
 import com.example.smartnotes.ai.YandexOcrService
@@ -31,17 +40,10 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import android.view.HapticFeedbackConstants
-import android.view.View
-import android.widget.ProgressBar
-import android.widget.TextView
-import androidx.exifinterface.media.ExifInterface
-import android.graphics.Bitmap
-import android.graphics.Matrix
-import com.example.smartnotes.ui.ScanOverlayView
 
 class ScannerActivity : AppCompatActivity() {
 
@@ -53,17 +55,16 @@ class ScannerActivity : AppCompatActivity() {
 
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
+
     private lateinit var scanOverlay: ScanOverlayView
     private lateinit var flashView: View
     private lateinit var progressBar: ProgressBar
     private lateinit var statusText: TextView
 
-
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
-        // сколько символов примерно влезает на 1 страницу
         private const val MAX_CHARS_PER_PAGE = 1800
     }
 
@@ -78,14 +79,18 @@ class ScannerActivity : AppCompatActivity() {
         viewFinder = findViewById(R.id.viewFinder)
         captureButton = findViewById(R.id.captureButton)
 
-        cameraExecutor = Executors.newSingleThreadExecutor()
-
-        captureButton.setOnClickListener { takePhoto() }
         scanOverlay = findViewById(R.id.scanOverlay)
         flashView = findViewById(R.id.flashView)
         progressBar = findViewById(R.id.progressBar)
         statusText = findViewById(R.id.statusText)
 
+        cameraExecutor = Executors.newSingleThreadExecutor()
+
+        captureButton.setOnClickListener {
+            showTitleInputDialog { title ->
+                takePhoto(title)
+            }
+        }
 
         if (allPermissionsGranted()) startCamera()
         else ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
@@ -95,14 +100,19 @@ class ScannerActivity : AppCompatActivity() {
         return if (SessionManager.isGuestMode(this)) "guest" else authRepository.getCurrentUser()?.uid
     }
 
-    private fun takePhoto() {
-        val imageCapture = imageCapture ?: return
+    private fun takePhoto(summaryTitle: String) {
+        val capture = imageCapture ?: return
 
-        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US).format(java.util.Date())
+        // отклик сразу
+        captureButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        shutterFlash()
+        setProcessing(true)
+
+        val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US).format(Date())
         val file = File(externalCacheDir, "$name.jpg")
         val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
 
-        imageCapture.takePicture(
+        capture.takePicture(
             outputOptions,
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
@@ -113,16 +123,15 @@ class ScannerActivity : AppCompatActivity() {
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val savedUri = output.savedUri ?: Uri.fromFile(file)
-                    lifecycleScope.launch { processImage(savedUri) }
+                    lifecycleScope.launch {
+                        processImage(savedUri, file, summaryTitle)
+                    }
                 }
             }
         )
-        captureButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-        shutterFlash()
-        setProcessing(true)
     }
 
-    private suspend fun processImage(imageUri: Uri) {
+    private suspend fun processImage(imageUri: Uri, file: File, summaryTitle: String) {
         val userId = resolveUserId()
         if (userId.isNullOrBlank()) {
             setProcessing(false)
@@ -133,17 +142,8 @@ class ScannerActivity : AppCompatActivity() {
         try {
             statusText.text = "Распознавание..."
 
-            // берём файл (он у тебя в cache)
-            val file = File(imageUri.path ?: run {
-                setProcessing(false)
-                Toast.makeText(this, "Не удалось получить файл изображения", Toast.LENGTH_SHORT).show()
-                return
-            })
-
             var bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
             bitmap = rotateIfNeeded(file, bitmap)
-
-            // обрезаем по рамке
             bitmap = cropByOverlay(bitmap)
 
             val recognizedText = YandexOcrService.recognizeText(bitmap).trim()
@@ -155,9 +155,10 @@ class ScannerActivity : AppCompatActivity() {
 
             statusText.text = "Сохранение..."
 
-            val summaryId = createNewSummary(userId, "Новый конспект из камеры")
-            val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
+            // ✅ создаём ОДИН раз, с названием пользователя
+            val summaryId = createNewSummary(userId, summaryTitle)
 
+            val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
             val saveOk = savePages(summaryId, pagesText)
             if (!saveOk) {
                 setProcessing(false)
@@ -177,7 +178,6 @@ class ScannerActivity : AppCompatActivity() {
             Toast.makeText(this, "Ошибка распознавания: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-
 
     private suspend fun createNewSummary(userId: String, title: String): String {
         val newSummary = Summary(
@@ -200,7 +200,7 @@ class ScannerActivity : AppCompatActivity() {
                 id = "",
                 summaryId = summaryId,
                 pageNumber = index + 1,
-                imageUrl = "", // в этом режиме мы страницы показываем текстом, без картинок
+                imageUrl = "",
                 recognizedText = text,
                 createdAt = System.currentTimeMillis()
             )
@@ -254,10 +254,12 @@ class ScannerActivity : AppCompatActivity() {
             }
         }
     }
+
     private fun setProcessing(isProcessing: Boolean) {
         captureButton.isEnabled = !isProcessing
         progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
         statusText.visibility = if (isProcessing) View.VISIBLE else View.GONE
+        if (isProcessing) statusText.text = "Обработка..."
     }
 
     private fun shutterFlash() {
@@ -269,6 +271,7 @@ class ScannerActivity : AppCompatActivity() {
             .withEndAction { flashView.visibility = View.GONE }
             .start()
     }
+
     private fun rotateIfNeeded(file: File, bitmap: Bitmap): Bitmap {
         return try {
             val exif = ExifInterface(file.absolutePath)
@@ -293,19 +296,16 @@ class ScannerActivity : AppCompatActivity() {
     }
 
     private fun cropByOverlay(bitmap: Bitmap): Bitmap {
-        // рамка в координатах viewFinder
         val rect = scanOverlay.getFrameRect()
 
         val vw = viewFinder.width.toFloat().coerceAtLeast(1f)
         val vh = viewFinder.height.toFloat().coerceAtLeast(1f)
 
-        // нормализуем (0..1)
         val nx = (rect.left / vw).coerceIn(0f, 1f)
         val ny = (rect.top / vh).coerceIn(0f, 1f)
         val nw = (rect.width() / vw).coerceIn(0f, 1f)
         val nh = (rect.height() / vh).coerceIn(0f, 1f)
 
-        // применяем к bitmap
         val bx = (nx * bitmap.width).toInt()
         val by = (ny * bitmap.height).toInt()
         val bw = (nw * bitmap.width).toInt()
@@ -319,6 +319,27 @@ class ScannerActivity : AppCompatActivity() {
         return Bitmap.createBitmap(bitmap, safeX, safeY, safeW, safeH)
     }
 
+    private fun showTitleInputDialog(onResult: (String) -> Unit) {
+        val editText = EditText(this).apply {
+            hint = "Название конспекта"
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Новый конспект")
+            .setMessage("Введите название конспекта")
+            .setView(editText)
+            .setCancelable(false)
+            .setPositiveButton("Продолжить") { _, _ ->
+                val title = editText.text.toString().trim()
+                val finalTitle =
+                    if (title.isBlank()) {
+                        "Конспект от ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())}"
+                    } else title
+                onResult(finalTitle)
+            }
+            .setNegativeButton("Отмена") { _, _ -> }
+            .show()
+    }
 
     override fun onDestroy() {
         super.onDestroy()
