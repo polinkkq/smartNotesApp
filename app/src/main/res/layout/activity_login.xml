@@ -76,15 +76,6 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:id="@+id/buttonGoogle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="58dp"
-                    android:layout_margin="10dp"
-                    android:backgroundTint="#2BFF1010"
-                    android:fontFamily="@font/inter_medium"
-                    android:text="Войти через Google" />
-
-                <Button
                     android:id="@+id/buttonAuth"
                     android:layout_width="wrap_content"
                     android:layout_height="58dp"
@@ -94,6 +85,15 @@
                     android:marqueeRepeatLimit="marquee_forever"
                     android:text="Войти" />
             </LinearLayout>
+
+            <Button
+                android:id="@+id/buttonGoogle"
+                android:layout_width="wrap_content"
+                android:layout_height="58dp"
+                android:layout_margin="10dp"
+                android:backgroundTint="#2BFF1010"
+                android:fontFamily="@font/inter_medium"
+                android:text="Войти через Google" />
 
             <Button
                 android:id="@+id/buttonGuest"

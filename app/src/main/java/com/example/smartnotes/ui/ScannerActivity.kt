@@ -34,6 +34,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.view.HapticFeedbackConstants
+import android.view.View
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.exifinterface.media.ExifInterface
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import com.example.smartnotes.ui.ScanOverlayView
 
 class ScannerActivity : AppCompatActivity() {
 
@@ -45,6 +53,11 @@ class ScannerActivity : AppCompatActivity() {
 
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
+    private lateinit var scanOverlay: ScanOverlayView
+    private lateinit var flashView: View
+    private lateinit var progressBar: ProgressBar
+    private lateinit var statusText: TextView
+
 
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
@@ -68,6 +81,11 @@ class ScannerActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         captureButton.setOnClickListener { takePhoto() }
+        scanOverlay = findViewById(R.id.scanOverlay)
+        flashView = findViewById(R.id.flashView)
+        progressBar = findViewById(R.id.progressBar)
+        statusText = findViewById(R.id.statusText)
+
 
         if (allPermissionsGranted()) startCamera()
         else ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
@@ -89,6 +107,7 @@ class ScannerActivity : AppCompatActivity() {
             ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onError(exception: ImageCaptureException) {
+                    setProcessing(false)
                     Toast.makeText(this@ScannerActivity, "Ошибка при захвате фото", Toast.LENGTH_SHORT).show()
                 }
 
@@ -98,51 +117,67 @@ class ScannerActivity : AppCompatActivity() {
                 }
             }
         )
+        captureButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        shutterFlash()
+        setProcessing(true)
     }
 
     private suspend fun processImage(imageUri: Uri) {
-        Timber.d("processImage called with URI: $imageUri")
-
         val userId = resolveUserId()
         if (userId.isNullOrBlank()) {
+            setProcessing(false)
             Toast.makeText(this, "Пользователь не авторизован", Toast.LENGTH_SHORT).show()
             return
         }
 
         try {
-            val bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
-            val recognizedText = YandexOcrService.recognizeText(bitmap).trim()
+            statusText.text = "Распознавание..."
 
+            // берём файл (он у тебя в cache)
+            val file = File(imageUri.path ?: run {
+                setProcessing(false)
+                Toast.makeText(this, "Не удалось получить файл изображения", Toast.LENGTH_SHORT).show()
+                return
+            })
+
+            var bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
+            bitmap = rotateIfNeeded(file, bitmap)
+
+            // обрезаем по рамке
+            bitmap = cropByOverlay(bitmap)
+
+            val recognizedText = YandexOcrService.recognizeText(bitmap).trim()
             if (recognizedText.isBlank()) {
+                setProcessing(false)
                 Toast.makeText(this, "Не удалось распознать текст", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            // 1) создаём новый конспект
-            val summaryId = createNewSummary(userId, "Новый конспект из камеры")
+            statusText.text = "Сохранение..."
 
-            // 2) режем текст на страницы
+            val summaryId = createNewSummary(userId, "Новый конспект из камеры")
             val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
 
-            // 3) сохраняем страницы в БД
             val saveOk = savePages(summaryId, pagesText)
-
             if (!saveOk) {
+                setProcessing(false)
                 Toast.makeText(this, "Ошибка сохранения страниц", Toast.LENGTH_LONG).show()
                 return
             }
 
-            // 4) обновляем pageCount у конспекта
             notesRepository.updateSummaryPageCount(summaryId, pagesText.size)
 
+            setProcessing(false)
             Toast.makeText(this, "Конспект сохранён, страниц: ${pagesText.size}", Toast.LENGTH_LONG).show()
             finish()
 
         } catch (e: Exception) {
             Timber.e(e, "Error in processImage")
+            setProcessing(false)
             Toast.makeText(this, "Ошибка распознавания: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
+
 
     private suspend fun createNewSummary(userId: String, title: String): String {
         val newSummary = Summary(
@@ -219,6 +254,71 @@ class ScannerActivity : AppCompatActivity() {
             }
         }
     }
+    private fun setProcessing(isProcessing: Boolean) {
+        captureButton.isEnabled = !isProcessing
+        progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
+        statusText.visibility = if (isProcessing) View.VISIBLE else View.GONE
+    }
+
+    private fun shutterFlash() {
+        flashView.visibility = View.VISIBLE
+        flashView.alpha = 1f
+        flashView.animate()
+            .alpha(0f)
+            .setDuration(120)
+            .withEndAction { flashView.visibility = View.GONE }
+            .start()
+    }
+    private fun rotateIfNeeded(file: File, bitmap: Bitmap): Bitmap {
+        return try {
+            val exif = ExifInterface(file.absolutePath)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            val angle = when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            if (angle == 0f) bitmap
+            else {
+                val m = Matrix().apply { postRotate(angle) }
+                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, m, true)
+            }
+        } catch (_: Exception) {
+            bitmap
+        }
+    }
+
+    private fun cropByOverlay(bitmap: Bitmap): Bitmap {
+        // рамка в координатах viewFinder
+        val rect = scanOverlay.getFrameRect()
+
+        val vw = viewFinder.width.toFloat().coerceAtLeast(1f)
+        val vh = viewFinder.height.toFloat().coerceAtLeast(1f)
+
+        // нормализуем (0..1)
+        val nx = (rect.left / vw).coerceIn(0f, 1f)
+        val ny = (rect.top / vh).coerceIn(0f, 1f)
+        val nw = (rect.width() / vw).coerceIn(0f, 1f)
+        val nh = (rect.height() / vh).coerceIn(0f, 1f)
+
+        // применяем к bitmap
+        val bx = (nx * bitmap.width).toInt()
+        val by = (ny * bitmap.height).toInt()
+        val bw = (nw * bitmap.width).toInt()
+        val bh = (nh * bitmap.height).toInt()
+
+        val safeX = bx.coerceIn(0, bitmap.width - 1)
+        val safeY = by.coerceIn(0, bitmap.height - 1)
+        val safeW = bw.coerceIn(1, bitmap.width - safeX)
+        val safeH = bh.coerceIn(1, bitmap.height - safeY)
+
+        return Bitmap.createBitmap(bitmap, safeX, safeY, safeW, safeH)
+    }
+
 
     override fun onDestroy() {
         super.onDestroy()
