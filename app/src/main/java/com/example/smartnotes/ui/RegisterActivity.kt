@@ -8,7 +8,6 @@ import androidx.lifecycle.lifecycleScope
 import com.example.smartnotes.R
 import com.google.android.material.textfield.TextInputEditText
 import com.example.smartnotes.repository.AuthRepository
-import com.example.smartnotes.models.UserRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,7 +44,6 @@ class RegistrationActivity : AppCompatActivity() {
         emailRegistration = findViewById(R.id.emailRegistration)
         passwordRegistration = findViewById(R.id.passwordRegistration)
         registerButton = findViewById(R.id.buttonRegistration)
-        roleRadioGroup = findViewById(R.id.roleGroup)
     }
 
     private fun setupClickListeners() {
@@ -60,10 +58,6 @@ class RegistrationActivity : AppCompatActivity() {
         val email = emailRegistration.text.toString().trim()
         val password = passwordRegistration.text.toString().trim()
 
-        val selectedRole = when (roleRadioGroup.checkedRadioButtonId) {
-            R.id.roleTeacher -> UserRole.TEACHER
-            else -> UserRole.STUDENT
-        }
 
         if (!validateInput(firstName, lastName, email, password)) {
             return
@@ -78,8 +72,7 @@ class RegistrationActivity : AppCompatActivity() {
                         email = email,
                         password = password,
                         firstName = firstName,
-                        lastName = lastName,
-                        role = selectedRole
+                        lastName = lastName
                     )
                 }
 

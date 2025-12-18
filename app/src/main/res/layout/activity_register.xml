@@ -67,39 +67,6 @@
                 android:padding="10dp" />
 
 
-            <RadioGroup
-                android:id="@+id/roleGroup"
-                android:layout_width="304dp"
-                android:layout_height="49dp"
-                android:layout_marginBottom="16dp"
-                android:orientation="horizontal"
-                android:padding="10dp">
-
-                <RadioButton
-                    android:id="@+id/roleStudent"
-                    style="@style/Widget.AppCompat.CompoundButton.RadioButton"
-                    android:layout_width="134dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:button="@drawable/custom_icon"
-                    android:checked="true"
-                    android:fontFamily="@font/inter_medium"
-                    android:paddingLeft="5dp"
-                    android:text="Студент"
-                    android:textColor="#333333" />
-
-                <RadioButton
-                    android:id="@+id/roleTeacher"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:button="@drawable/custom_icon"
-                    android:fontFamily="@font/inter_medium"
-                    android:paddingLeft="5dp"
-                    android:text="Преподаватель"
-                    android:textColor="#333333" />
-            </RadioGroup>
-
             <EditText
                 android:id="@+id/passwordRegistration"
                 android:layout_width="match_parent"

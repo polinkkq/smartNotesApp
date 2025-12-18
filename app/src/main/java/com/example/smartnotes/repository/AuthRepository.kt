@@ -1,7 +1,6 @@
 package com.example.smartnotes.repository
 
 import com.example.smartnotes.models.User
-import com.example.smartnotes.models.UserRole
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.tasks.await
@@ -35,7 +34,6 @@ class AuthRepository {
         password: String,
         firstName: String,
         lastName: String,
-        role: UserRole
     ): Result<String> {
         return try {
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
@@ -47,8 +45,7 @@ class AuthRepository {
                 id = uid,
                 firstName = firstName,
                 lastName = lastName,
-                email = email,
-                role = role
+                email = email
             )
 
             val createRes = firebaseRepository.createUser(user)
