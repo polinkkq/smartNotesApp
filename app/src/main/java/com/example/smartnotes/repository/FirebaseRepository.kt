@@ -14,8 +14,6 @@ class FirebaseRepository {
 
     val database: FirebaseFirestore = FirebaseFirestore.getInstance()
 
-    // -------- USERS --------
-
     suspend fun createUser(user: User): Result<String> {
         return try {
             database.collection("users").document(user.id).set(user).await()
@@ -61,8 +59,6 @@ class FirebaseRepository {
             Result.failure(e)
         }
     }
-
-    // -------- FOLDERS --------
 
     suspend fun getUserFolders(userId: String): Result<List<Folder>> {
         return try {
@@ -223,7 +219,6 @@ class FirebaseRepository {
         }
     }
 
-    // -------- SUMMARIES --------
 
     suspend fun getSummariesForUser(userId: String): Result<List<Summary>> {
         return try {
@@ -366,7 +361,6 @@ class FirebaseRepository {
         }
     }
 
-    // -------- PAGES --------
 
     suspend fun createPage(page: Page): Result<String> {
         return try {
@@ -474,7 +468,7 @@ class FirebaseRepository {
             val summarySnap = summaryRef.get().await()
 
             if (!summarySnap.exists()) {
-                return Result.success(Unit) // уже удалено
+                return Result.success(Unit)
             }
 
             val docUserId = summarySnap.getString("userId") ?: ""
@@ -490,7 +484,7 @@ class FirebaseRepository {
                 .get()
                 .await()
 
-            // Firestore batch лимит 500 операций → удаляем чанками
+            // Firestore batch лимит 500 операций удаляем чанками
             val pageDocs = pagesSnap.documents
             val chunks = pageDocs.chunked(450)
 
@@ -500,7 +494,7 @@ class FirebaseRepository {
                 }.await()
             }
 
-            // 2) удаляем сам summary и уменьшаем счетчик в папке (если был)
+            // 2) удаляем сам summary и уменьшаем счетчик в папке
             database.runBatch { batch ->
                 batch.delete(summaryRef)
 

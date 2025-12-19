@@ -70,8 +70,6 @@ class ScannerActivity : AppCompatActivity() {
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
         private const val MAX_CHARS_PER_PAGE = 1800
-
-        // ✅ ВАЖНО: кроп по рамке выключаем, чтобы не было “приближения”
         private const val USE_OVERLAY_CROP = false
     }
 
@@ -135,8 +133,6 @@ class ScannerActivity : AppCompatActivity() {
 
                         val fixed = rotateIfNeeded(file, bitmap)
 
-                        // ✅ Ключевой фикс:
-                        // НЕ режем по overlay → используем весь кадр
                         val bitmapForOcr =
                             if (USE_OVERLAY_CROP) cropByOverlay(fixed) else fixed
 
@@ -161,7 +157,6 @@ class ScannerActivity : AppCompatActivity() {
             setProcessing(true, "Распознавание...")
 
             val recognizedText = withContext(Dispatchers.IO) {
-                // (опционально) можно чуть уменьшить размер, чтобы OCR работал стабильнее
                 val scaled = downscaleIfTooLarge(bitmapForOcr, 2000)
                 YandexOcrService.recognizeText(scaled).trim()
             }
@@ -363,8 +358,6 @@ class ScannerActivity : AppCompatActivity() {
             bitmap
         }
     }
-
-    // ⚠️ оставляем на будущее, но по умолчанию выключено (USE_OVERLAY_CROP=false)
     private fun cropByOverlay(bitmap: Bitmap): Bitmap {
         val rect = scanOverlay.getFrameRect()
 
@@ -415,7 +408,7 @@ class ScannerActivity : AppCompatActivity() {
                     if (title.isBlank()) {
                         "Конспект от ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())}"
                     } else title
-                onConfirm(finalTitle)
+                on Confirm(finalTitle)
             }
             .setNegativeButton("Отмена") { _, _ -> onCancel() }
             .show()

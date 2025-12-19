@@ -15,7 +15,6 @@ class WelcomeActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.welcome_screen)
         supportActionBar?.hide()
-        // гость не должен сохраняться между запусками
         SessionManager.setGuestMode(this, false)
 
         Handler(Looper.getMainLooper()).postDelayed({

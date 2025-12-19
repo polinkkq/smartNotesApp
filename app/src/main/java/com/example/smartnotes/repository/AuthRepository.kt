@@ -122,7 +122,6 @@ class AuthRepository {
 
             Result.success(Unit)
         } catch (e: Exception) {
-            // Тут чаще всего будет "recent login required"
             Timber.e(e, "deleteAccount failed")
             Result.failure(e)
         }

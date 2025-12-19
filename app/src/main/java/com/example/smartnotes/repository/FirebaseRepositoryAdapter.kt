@@ -56,7 +56,6 @@ class FirebaseRepositoryAdapter(
         return firebaseRepository.addSummariesToFolder(userId, folderId, summaryIds)
     }
 
-    // ✅ НОВОЕ: убрать конспект из папки (в "Несортированные")
     override suspend fun removeSummaryFromFolder(userId: String, summaryId: String): Result<Unit> {
         return firebaseRepository.removeSummaryFromFolder(userId, summaryId)
     }

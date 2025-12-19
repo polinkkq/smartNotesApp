@@ -141,8 +141,6 @@ class FolderContentActivity : AppCompatActivity() {
             buttonAuthOrChangePass.isEnabled = true
             buttonAuthOrChangePass.isClickable = true
         } else {
-            // Если пользователь НЕ гостевой, но парольного провайдера нет (Google),
-            // можно оставить "Сменить пароль", но по клику покажем тост.
             buttonAuthOrChangePass.text = "Сменить пароль"
             buttonAuthOrChangePass.isEnabled = true
             buttonAuthOrChangePass.isClickable = true
@@ -254,7 +252,7 @@ class FolderContentActivity : AppCompatActivity() {
 
             setOnClickListener { openSummary(summary) }
 
-            // ✅ Удаление из папки по удержанию (перенос в несортированные)
+            // Удаление из папки по удержанию (перенос в несортированные)
             setOnLongClickListener {
                 showRemoveFromFolderDialog(summary)
                 true
@@ -268,9 +266,6 @@ class FolderContentActivity : AppCompatActivity() {
         })
     }
 
-    // ---------------------------
-    // ДОБАВЛЕНИЕ КОНСПЕКТОВ В ПАПКУ (из несортированных)
-    // ---------------------------
     private fun showAddSummaryDialog() {
         val uid = resolveUserId()
         if (uid.isNullOrBlank()) return
@@ -369,9 +364,6 @@ class FolderContentActivity : AppCompatActivity() {
         }
     }
 
-    // ---------------------------
-    // УДАЛИТЬ КОНСПЕКТ ИЗ ПАПКИ (folderId -> "")
-    // ---------------------------
     private fun showRemoveFromFolderDialog(summary: Summary) {
         val uid = resolveUserId() ?: return
 
@@ -393,9 +385,6 @@ class FolderContentActivity : AppCompatActivity() {
             .show()
     }
 
-    // ---------------------------
-    // СМЕНА ПАРОЛЯ
-    // ---------------------------
     private fun showChangePasswordDialog() {
         if (SessionManager.isGuestMode(this)) {
             Toast.makeText(

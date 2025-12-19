@@ -295,7 +295,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ---------- ACTIONS ----------
 
     private fun openFolder(folder: Folder) {
         startActivity(Intent(this, FolderContentActivity::class.java).apply {
@@ -464,7 +463,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Для Google/других провайдеров просто пробуем удалить (может потребоваться recent login)
+        // Для Google/других провайдеров просто пробуем удалить
         AlertDialog.Builder(this)
             .setTitle("Удалить аккаунт?")
             .setMessage("Это удалит аккаунт и все данные. Если появится ошибка «нужен повторный вход», выйди и войди заново, затем повтори удаление.")
@@ -497,8 +496,6 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent(this, LoginActivity::class.java))
         finish()
     }
-
-    // ---------- HELPERS ----------
 
     private fun getSummaryCountText(count: Int): String {
         return when {

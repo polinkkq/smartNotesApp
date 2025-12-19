@@ -71,7 +71,7 @@ class GalleryPickerActivity : AppCompatActivity() {
                 return
             }
 
-            // ✅ спрашиваем название ОДИН раз на весь конспект
+            // спрашиваем название конспекта
             showTitleInputDialog { title ->
                 lifecycleScope.launch { processImagesBatch(uris, title) }
             }
@@ -92,7 +92,7 @@ class GalleryPickerActivity : AppCompatActivity() {
         }
 
         try {
-            // ✅ создаём конспект с названием пользователя
+            // создаём конспект с названием пользователя
             val summaryId = createNewSummary(userId, summaryTitle)
 
             // OCR всех картинок → один общий текст

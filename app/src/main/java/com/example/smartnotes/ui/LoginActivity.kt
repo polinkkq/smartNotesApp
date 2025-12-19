@@ -126,9 +126,6 @@ class LoginActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.textRegister)?.setOnClickListener {
             navigateToRegistration()
         }
-
-        // ✅ ВОТ ЭТОГО У ТЕБЯ НЕ ХВАТАЛО: обработчик "Забыли пароль"
-        // Убедись, что в activity_login.xml у текста "Забыли пароль?" id = textForgotPassword
         findViewById<TextView>(R.id.textForgotPassword)?.setOnClickListener {
             showResetPasswordDialog()
         }
@@ -171,7 +168,7 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    // ✅ Диалог восстановления пароля
+    // Диалог восстановления пароля
     private fun showResetPasswordDialog() {
         val emailPrefill = emailAuth.text?.toString()?.trim().orEmpty()
 

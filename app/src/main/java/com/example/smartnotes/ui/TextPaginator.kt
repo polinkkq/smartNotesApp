@@ -2,11 +2,6 @@ package com.example.smartnotes.utils
 
 object TextPaginator {
 
-    /**
-     * Делит текст на страницы примерно одинакового объёма.
-     * - Не режет слова посередине (по возможности)
-     * - Сохраняет переносы строк
-     */
     fun splitIntoPages(fullText: String, maxCharsPerPage: Int): List<String> {
         val text = fullText.trim()
         if (text.isBlank()) return emptyList()

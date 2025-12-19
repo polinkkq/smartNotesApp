@@ -7,14 +7,9 @@ import java.util.UUID
 
 class GuestNotesRepository : NotesRepository {
 
-    // Данные гостя живут только в памяти
     private val folders get() = GuestDataStore.folders
     private val summaries get() = GuestDataStore.summaries
     private val pages get() = GuestDataStore.pages
-
-    // ------------------------
-    // FOLDERS
-    // ------------------------
 
     override suspend fun getUserFolders(userId: String): Result<List<Folder>> {
         // userId игнорируем: для гостя всё одно
@@ -62,9 +57,6 @@ class GuestNotesRepository : NotesRepository {
         return Result.success(Unit)
     }
 
-    // ------------------------
-    // SUMMARIES
-    // ------------------------
 
     override suspend fun getUnsortedSummaries(userId: String): Result<List<Summary>> {
         return Result.success(
@@ -121,9 +113,6 @@ class GuestNotesRepository : NotesRepository {
         }
     }
 
-    // ------------------------
-    // PAGES
-    // ------------------------
 
     override suspend fun createPage(page: Page): Result<String> {
         val id = UUID.randomUUID().toString()
@@ -140,9 +129,6 @@ class GuestNotesRepository : NotesRepository {
         )
     }
 
-    // ------------------------
-    // MOVE / ADD
-    // ------------------------
 
     override suspend fun addSummariesToFolder(userId: String, folderId: String, summaryIds: List<String>): Result<Unit> {
         if (summaryIds.isEmpty()) return Result.success(Unit)
@@ -172,7 +158,7 @@ class GuestNotesRepository : NotesRepository {
         return Result.success(Unit)
     }
 
-    // ✅ НОВОЕ: убрать конспект из папки -> в несортированные
+    // убрать конспект из папки -> в несортированные
     override suspend fun removeSummaryFromFolder(userId: String, summaryId: String): Result<Unit> {
         val sIdx = summaries.indexOfFirst { it.id == summaryId }
         if (sIdx < 0) return Result.success(Unit)
