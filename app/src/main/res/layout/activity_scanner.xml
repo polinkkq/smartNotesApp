@@ -13,7 +13,12 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
-
+    <ImageView
+        android:id="@+id/frozenImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:scaleType="centerCrop"/>
     <!-- Рамка наведения -->
     <com.example.smartnotes.ui.ScanOverlayView
         android:id="@+id/scanOverlay"

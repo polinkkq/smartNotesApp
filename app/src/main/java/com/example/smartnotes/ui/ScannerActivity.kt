@@ -11,6 +11,7 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -36,7 +37,9 @@ import com.example.smartnotes.repository.NotesRepository
 import com.example.smartnotes.repository.RepositoryProvider
 import com.example.smartnotes.repository.SessionManager
 import com.example.smartnotes.utils.TextPaginator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.text.SimpleDateFormat
@@ -50,27 +53,30 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var viewFinder: PreviewView
     private lateinit var captureButton: ImageButton
 
+    private lateinit var scanOverlay: ScanOverlayView
+    private lateinit var flashView: View
+    private lateinit var progressBar: ProgressBar
+    private lateinit var statusText: TextView
+    private lateinit var frozenImage: ImageView
+
     private val authRepository = AuthRepository()
     private lateinit var notesRepository: NotesRepository
 
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
 
-    private lateinit var scanOverlay: ScanOverlayView
-    private lateinit var flashView: View
-    private lateinit var progressBar: ProgressBar
-    private lateinit var statusText: TextView
-
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
 
         private const val MAX_CHARS_PER_PAGE = 1800
+
+        // ✅ ВАЖНО: кроп по рамке выключаем, чтобы не было “приближения”
+        private const val USE_OVERLAY_CROP = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_scanner)
 
@@ -83,14 +89,11 @@ class ScannerActivity : AppCompatActivity() {
         flashView = findViewById(R.id.flashView)
         progressBar = findViewById(R.id.progressBar)
         statusText = findViewById(R.id.statusText)
+        frozenImage = findViewById(R.id.frozenImage)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        captureButton.setOnClickListener {
-            showTitleInputDialog { title ->
-                takePhoto(title)
-            }
-        }
+        captureButton.setOnClickListener { takePhotoAndRecognize() }
 
         if (allPermissionsGranted()) startCamera()
         else ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
@@ -100,13 +103,12 @@ class ScannerActivity : AppCompatActivity() {
         return if (SessionManager.isGuestMode(this)) "guest" else authRepository.getCurrentUser()?.uid
     }
 
-    private fun takePhoto(summaryTitle: String) {
+    private fun takePhotoAndRecognize() {
         val capture = imageCapture ?: return
 
-        // отклик сразу
         captureButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         shutterFlash()
-        setProcessing(true)
+        setProcessing(true, "Съёмка...")
 
         val name = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US).format(Date())
         val file = File(externalCacheDir, "$name.jpg")
@@ -124,43 +126,85 @@ class ScannerActivity : AppCompatActivity() {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val savedUri = output.savedUri ?: Uri.fromFile(file)
                     lifecycleScope.launch {
-                        processImage(savedUri, file, summaryTitle)
+                        val bitmap = loadBitmapFromUri(savedUri)
+                        if (bitmap == null) {
+                            setProcessing(false)
+                            Toast.makeText(this@ScannerActivity, "Не удалось загрузить изображение", Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+
+                        val fixed = rotateIfNeeded(file, bitmap)
+
+                        // ✅ Ключевой фикс:
+                        // НЕ режем по overlay → используем весь кадр
+                        val bitmapForOcr =
+                            if (USE_OVERLAY_CROP) cropByOverlay(fixed) else fixed
+
+                        freezeFrame(bitmapForOcr)
+                        recognizeThenAskTitleAndSave(bitmapForOcr)
                     }
                 }
             }
         )
     }
 
-    private suspend fun processImage(imageUri: Uri, file: File, summaryTitle: String) {
+    private suspend fun recognizeThenAskTitleAndSave(bitmapForOcr: Bitmap) {
         val userId = resolveUserId()
         if (userId.isNullOrBlank()) {
+            unfreezeFrame()
             setProcessing(false)
             Toast.makeText(this, "Пользователь не авторизован", Toast.LENGTH_SHORT).show()
             return
         }
 
         try {
-            statusText.text = "Распознавание..."
+            setProcessing(true, "Распознавание...")
 
-            var bitmap = MediaStore.Images.Media.getBitmap(contentResolver, imageUri)
-            bitmap = rotateIfNeeded(file, bitmap)
-            bitmap = cropByOverlay(bitmap)
+            val recognizedText = withContext(Dispatchers.IO) {
+                // (опционально) можно чуть уменьшить размер, чтобы OCR работал стабильнее
+                val scaled = downscaleIfTooLarge(bitmapForOcr, 2000)
+                YandexOcrService.recognizeText(scaled).trim()
+            }
 
-            val recognizedText = YandexOcrService.recognizeText(bitmap).trim()
             if (recognizedText.isBlank()) {
+                unfreezeFrame()
                 setProcessing(false)
                 Toast.makeText(this, "Не удалось распознать текст", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            statusText.text = "Сохранение..."
+            val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
+            setProcessing(false)
 
-            // ✅ создаём ОДИН раз, с названием пользователя
+            showTitleInputDialog(
+                onConfirm = { title ->
+                    lifecycleScope.launch {
+                        saveRecognizedResult(userId, title, pagesText)
+                    }
+                },
+                onCancel = {
+                    unfreezeFrame()
+                    finish()
+                }
+            )
+
+        } catch (e: Exception) {
+            Timber.e(e, "OCR failed")
+            unfreezeFrame()
+            setProcessing(false)
+            Toast.makeText(this, "Ошибка распознавания: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private suspend fun saveRecognizedResult(userId: String, summaryTitle: String, pagesText: List<String>) {
+        try {
+            setProcessing(true, "Сохранение...")
+
             val summaryId = createNewSummary(userId, summaryTitle)
 
-            val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
             val saveOk = savePages(summaryId, pagesText)
             if (!saveOk) {
+                unfreezeFrame()
                 setProcessing(false)
                 Toast.makeText(this, "Ошибка сохранения страниц", Toast.LENGTH_LONG).show()
                 return
@@ -168,15 +212,40 @@ class ScannerActivity : AppCompatActivity() {
 
             notesRepository.updateSummaryPageCount(summaryId, pagesText.size)
 
+            unfreezeFrame()
             setProcessing(false)
             Toast.makeText(this, "Конспект сохранён, страниц: ${pagesText.size}", Toast.LENGTH_LONG).show()
             finish()
 
         } catch (e: Exception) {
-            Timber.e(e, "Error in processImage")
+            Timber.e(e, "Save failed")
+            unfreezeFrame()
             setProcessing(false)
-            Toast.makeText(this, "Ошибка распознавания: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Ошибка сохранения: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun loadBitmapFromUri(uri: Uri): Bitmap? {
+        return try {
+            MediaStore.Images.Media.getBitmap(contentResolver, uri)
+        } catch (e: Exception) {
+            Timber.e(e, "loadBitmapFromUri failed")
+            null
+        }
+    }
+
+    private fun freezeFrame(bitmap: Bitmap) {
+        frozenImage.setImageBitmap(bitmap)
+        frozenImage.visibility = View.VISIBLE
+        viewFinder.visibility = View.INVISIBLE
+        scanOverlay.visibility = View.INVISIBLE
+    }
+
+    private fun unfreezeFrame() {
+        frozenImage.setImageDrawable(null)
+        frozenImage.visibility = View.GONE
+        viewFinder.visibility = View.VISIBLE
+        scanOverlay.visibility = View.VISIBLE
     }
 
     private suspend fun createNewSummary(userId: String, title: String): String {
@@ -255,11 +324,11 @@ class ScannerActivity : AppCompatActivity() {
         }
     }
 
-    private fun setProcessing(isProcessing: Boolean) {
+    private fun setProcessing(isProcessing: Boolean, text: String = "Обработка...") {
         captureButton.isEnabled = !isProcessing
         progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
         statusText.visibility = if (isProcessing) View.VISIBLE else View.GONE
-        if (isProcessing) statusText.text = "Обработка..."
+        if (isProcessing) statusText.text = text
     }
 
     private fun shutterFlash() {
@@ -295,6 +364,7 @@ class ScannerActivity : AppCompatActivity() {
         }
     }
 
+    // ⚠️ оставляем на будущее, но по умолчанию выключено (USE_OVERLAY_CROP=false)
     private fun cropByOverlay(bitmap: Bitmap): Bitmap {
         val rect = scanOverlay.getFrameRect()
 
@@ -319,25 +389,35 @@ class ScannerActivity : AppCompatActivity() {
         return Bitmap.createBitmap(bitmap, safeX, safeY, safeW, safeH)
     }
 
-    private fun showTitleInputDialog(onResult: (String) -> Unit) {
-        val editText = EditText(this).apply {
-            hint = "Название конспекта"
-        }
+    private fun downscaleIfTooLarge(src: Bitmap, maxSide: Int): Bitmap {
+        val w = src.width
+        val h = src.height
+        val max = maxOf(w, h)
+        if (max <= maxSide) return src
+
+        val scale = maxSide.toFloat() / max.toFloat()
+        val nw = (w * scale).toInt().coerceAtLeast(1)
+        val nh = (h * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(src, nw, nh, true)
+    }
+
+    private fun showTitleInputDialog(onConfirm: (String) -> Unit, onCancel: () -> Unit) {
+        val editText = EditText(this).apply { hint = "Название конспекта" }
 
         AlertDialog.Builder(this)
-            .setTitle("Новый конспект")
+            .setTitle("Сохранить конспект")
             .setMessage("Введите название конспекта")
             .setView(editText)
             .setCancelable(false)
-            .setPositiveButton("Продолжить") { _, _ ->
-                val title = editText.text.toString().trim()
+            .setPositiveButton("Сохранить") { _, _ ->
+                val title = editText.text?.toString()?.trim().orEmpty()
                 val finalTitle =
                     if (title.isBlank()) {
                         "Конспект от ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())}"
                     } else title
-                onResult(finalTitle)
+                onConfirm(finalTitle)
             }
-            .setNegativeButton("Отмена") { _, _ -> }
+            .setNegativeButton("Отмена") { _, _ -> onCancel() }
             .show()
     }
 
