@@ -408,7 +408,7 @@ class ScannerActivity : AppCompatActivity() {
                     if (title.isBlank()) {
                         "Конспект от ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())}"
                     } else title
-                Confirm(finalTitle)
+                onСonfirm(finalTitle)
             }
             .setNegativeButton("Отмена") { _, _ -> onCancel() }
             .show()
