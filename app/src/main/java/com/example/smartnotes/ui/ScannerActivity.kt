@@ -47,6 +47,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.min
 
 class ScannerActivity : AppCompatActivity() {
 
@@ -57,6 +58,7 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var flashView: View
     private lateinit var progressBar: ProgressBar
     private lateinit var statusText: TextView
+
     private lateinit var frozenImage: ImageView
 
     private val authRepository = AuthRepository()
@@ -68,9 +70,7 @@ class ScannerActivity : AppCompatActivity() {
     companion object {
         private const val REQUEST_CODE_PERMISSIONS = 10
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
-
         private const val MAX_CHARS_PER_PAGE = 1800
-        private const val USE_OVERLAY_CROP = false
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,11 +87,20 @@ class ScannerActivity : AppCompatActivity() {
         flashView = findViewById(R.id.flashView)
         progressBar = findViewById(R.id.progressBar)
         statusText = findViewById(R.id.statusText)
+
         frozenImage = findViewById(R.id.frozenImage)
+
+
+        viewFinder.scaleType = PreviewView.ScaleType.FIT_CENTER
+
+        // ✅ Чтобы "замороженный кадр" не выглядел увеличенным
+        frozenImage.scaleType = ImageView.ScaleType.FIT_CENTER
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        captureButton.setOnClickListener { takePhotoAndRecognize() }
+        captureButton.setOnClickListener {
+            takePhotoAndRecognize()
+        }
 
         if (allPermissionsGranted()) startCamera()
         else ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
@@ -123,6 +132,7 @@ class ScannerActivity : AppCompatActivity() {
 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val savedUri = output.savedUri ?: Uri.fromFile(file)
+
                     lifecycleScope.launch {
                         val bitmap = loadBitmapFromUri(savedUri)
                         if (bitmap == null) {
@@ -133,11 +143,13 @@ class ScannerActivity : AppCompatActivity() {
 
                         val fixed = rotateIfNeeded(file, bitmap)
 
-                        val bitmapForOcr =
-                            if (USE_OVERLAY_CROP) cropByOverlay(fixed) else fixed
 
-                        freezeFrame(bitmapForOcr)
-                        recognizeThenAskTitleAndSave(bitmapForOcr)
+                        val cropped = cropByOverlayFitCenter(fixed)
+
+                        // замораживаем именно то, что пойдёт в OCR
+                        freezeFrame(cropped)
+
+                        recognizeThenAskTitleAndSave(cropped)
                     }
                 }
             }
@@ -157,8 +169,7 @@ class ScannerActivity : AppCompatActivity() {
             setProcessing(true, "Распознавание...")
 
             val recognizedText = withContext(Dispatchers.IO) {
-                val scaled = downscaleIfTooLarge(bitmapForOcr, 2000)
-                YandexOcrService.recognizeText(scaled).trim()
+                YandexOcrService.recognizeText(bitmapForOcr).trim()
             }
 
             if (recognizedText.isBlank()) {
@@ -169,6 +180,7 @@ class ScannerActivity : AppCompatActivity() {
             }
 
             val pagesText = TextPaginator.splitIntoPages(recognizedText, MAX_CHARS_PER_PAGE)
+
             setProcessing(false)
 
             showTitleInputDialog(
@@ -358,44 +370,49 @@ class ScannerActivity : AppCompatActivity() {
             bitmap
         }
     }
-    private fun cropByOverlay(bitmap: Bitmap): Bitmap {
+
+
+    private fun cropByOverlayFitCenter(bitmap: Bitmap): Bitmap {
         val rect = scanOverlay.getFrameRect()
 
         val vw = viewFinder.width.toFloat().coerceAtLeast(1f)
         val vh = viewFinder.height.toFloat().coerceAtLeast(1f)
 
-        val nx = (rect.left / vw).coerceIn(0f, 1f)
-        val ny = (rect.top / vh).coerceIn(0f, 1f)
-        val nw = (rect.width() / vw).coerceIn(0f, 1f)
-        val nh = (rect.height() / vh).coerceIn(0f, 1f)
+        val bw = bitmap.width.toFloat().coerceAtLeast(1f)
+        val bh = bitmap.height.toFloat().coerceAtLeast(1f)
 
-        val bx = (nx * bitmap.width).toInt()
-        val by = (ny * bitmap.height).toInt()
-        val bw = (nw * bitmap.width).toInt()
-        val bh = (nh * bitmap.height).toInt()
+        // FIT_CENTER => масштаб = min(vw/bw, vh/bh)
+        val scale = min(vw / bw, vh / bh)
 
-        val safeX = bx.coerceIn(0, bitmap.width - 1)
-        val safeY = by.coerceIn(0, bitmap.height - 1)
-        val safeW = bw.coerceIn(1, bitmap.width - safeX)
-        val safeH = bh.coerceIn(1, bitmap.height - safeY)
+        val displayedW = bw * scale
+        val displayedH = bh * scale
 
-        return Bitmap.createBitmap(bitmap, safeX, safeY, safeW, safeH)
-    }
+        // “поля” по краям
+        val offsetX = (vw - displayedW) / 2f
+        val offsetY = (vh - displayedH) / 2f
 
-    private fun downscaleIfTooLarge(src: Bitmap, maxSide: Int): Bitmap {
-        val w = src.width
-        val h = src.height
-        val max = maxOf(w, h)
-        if (max <= maxSide) return src
+        // переводим overlay rect из координат View в координаты Bitmap
+        val left = ((rect.left - offsetX) / scale).toInt()
+        val top = ((rect.top - offsetY) / scale).toInt()
+        val right = ((rect.right - offsetX) / scale).toInt()
+        val bottom = ((rect.bottom - offsetY) / scale).toInt()
 
-        val scale = maxSide.toFloat() / max.toFloat()
-        val nw = (w * scale).toInt().coerceAtLeast(1)
-        val nh = (h * scale).toInt().coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(src, nw, nh, true)
+        // безопасные границы
+        val safeLeft = left.coerceIn(0, bitmap.width - 1)
+        val safeTop = top.coerceIn(0, bitmap.height - 1)
+        val safeRight = right.coerceIn(safeLeft + 1, bitmap.width)
+        val safeBottom = bottom.coerceIn(safeTop + 1, bitmap.height)
+
+        val cropW = (safeRight - safeLeft).coerceAtLeast(1)
+        val cropH = (safeBottom - safeTop).coerceAtLeast(1)
+
+        return Bitmap.createBitmap(bitmap, safeLeft, safeTop, cropW, cropH)
     }
 
     private fun showTitleInputDialog(onConfirm: (String) -> Unit, onCancel: () -> Unit) {
-        val editText = EditText(this).apply { hint = "Название конспекта" }
+        val editText = EditText(this).apply {
+            hint = "Название конспекта"
+        }
 
         AlertDialog.Builder(this)
             .setTitle("Сохранить конспект")
@@ -408,9 +425,11 @@ class ScannerActivity : AppCompatActivity() {
                     if (title.isBlank()) {
                         "Конспект от ${SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date())}"
                     } else title
-                onСonfirm(finalTitle)
+                onConfirm(finalTitle)
             }
-            .setNegativeButton("Отмена") { _, _ -> onCancel() }
+            .setNegativeButton("Отмена") { _, _ ->
+                onCancel()
+            }
             .show()
     }
 
